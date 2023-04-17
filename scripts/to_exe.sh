@@ -1,1 +1,1 @@
-pyinstaller --onefile src/__init__.py -n data-tree
+pyinstaller --onefile src/__init__.py -n datatree

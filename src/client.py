@@ -1,26 +1,51 @@
 import dpath
+from util import get_raw_type_name, get_raw_key_name, get_type_name_from_key, get_roblox_type
 from luau import indent_block
 from luau.convert import from_dict, mark_as_literal, from_dict_to_type
 from luau.roblox import write_script
 from luau.roblox.wally import require_roblox_wally_package
+from luau.roblox.util import get_module_require
 from luau.path import get_if_module_script, remove_all_path_variants
-from src.config import get_data_config, SERVICE_PROXY_PATH, NETWORK_UTIL_WALLY_PATH, MAID_WALLY_PATH, HEADER_WARNING, GET_SUFFIX_KEY, UPDATE_SUFFIX_KEY
+from config import get_data_config, SERVICE_PROXY_PATH, NETWORK_UTIL_WALLY_PATH, MAID_WALLY_PATH, HEADER_WARNING, GET_SUFFIX_KEY, UPDATE_SUFFIX_KEY
 
 def build():
 	config = get_data_config()
 
-	build_path = config["build"]["client_path"]
+	build_path = config["build"]["out"]["client_path"]
 	assert get_if_module_script(build_path), "client datatree must be a ModuleScript, please make sure the client_path only ends with .lua/luau"
 	assert not "init" in config["tree"], "\"init\" is reserved for a funciton in the client tree type."
 	
 	remove_all_path_variants(build_path)
 	
+	type_imports = []
+	for key in config["types"]:
+		type_imports.append(f"export type {key} = DataTypes.{key}")
+
 	type_tree = {}
 	func_tree = {}
-	for path, value in dpath.search(config["tree"], '**', yielded=True):
-		if type(value) == str:
+	for full_path, value in dpath.search(config["tree"], '**', yielded=True):
+		keys = full_path.split("/")
+		raw_keys = []
+		final_type: None | str = None
+		for key in keys:
+			if final_type == None:
+				raw_keys.append(get_raw_key_name(key))
+				final_type = get_type_name_from_key(key)
+						
+
+		path = "/".join(raw_keys)
+		if len(raw_keys) < len(keys):
+			ro_type = get_roblox_type(final_type)
 			dpath.new(func_tree, path, mark_as_literal(f"newReceiver(\"{path}\")"))
-			dpath.new(type_tree, path, mark_as_literal("Receiver<string>"))
+			dpath.new(type_tree, path, mark_as_literal(f"Receiver<{ro_type}>"))
+		elif type(value) == str:
+			raw_value = get_raw_type_name(value)
+			if raw_value in config["types"]:
+				dpath.new(func_tree, path, mark_as_literal(f"newReceiver(\"{path}\")"))
+				dpath.new(type_tree, path, mark_as_literal(f"Receiver<{final_type}>"))
+			else:
+				dpath.new(func_tree, path, mark_as_literal(f"newReceiver(\"{path}\")"))
+				dpath.new(type_tree, path, mark_as_literal("Receiver<string>"))
 		elif type(value) == bool:
 			dpath.new(func_tree, path, mark_as_literal(f"newReceiver(\"{path}\")"))
 			dpath.new(type_tree, path, mark_as_literal("Receiver<boolean>"))
@@ -42,9 +67,13 @@ def build():
 		"local Maid = " + require_roblox_wally_package(MAID_WALLY_PATH, is_header=False),
 		"local ServiceProxy = " + require_roblox_wally_package(SERVICE_PROXY_PATH, is_header=False),
 		"",
+		"--Modules",
+		"local DataTypes = " + get_module_require(config["build"]["shared_types_roblox_path"]),
+		"",
 		"--Types",
 		"type Maid = Maid.Maid",
 		"export type Receiver<T> = () -> T",
+	] + type_imports + [
 		"",
 		"export type DataTree = " + from_dict_to_type(type_tree),
 		"",
