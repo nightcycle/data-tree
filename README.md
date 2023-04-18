@@ -1,4 +1,4 @@
-# data-tree
+# datatree
 ## what is this?
 This is a command line tool, downloadable with foreman / aftman, that allows you to define a data structure for players and have it generate the scripts supporting the reading / writing of player data as well as replicating it to the client of relevant players.
 
