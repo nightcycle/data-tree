@@ -304,7 +304,6 @@ tree: # the overall structure of the t
 You can set the metadata as any dictionary, in this example I'll be using it to set the version:
 ```yaml
 metadata: 
-  saved_at::DateTime: NOW
   major: 1
   minor: 2
   patch: 3
