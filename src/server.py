@@ -6,7 +6,7 @@ from luau.roblox import write_script
 from luau.roblox.wally import require_roblox_wally_package
 from luau.roblox.util import get_module_require
 from luau.path import get_if_module_script, remove_all_path_variants
-from config import get_data_config, SIGNAL_WALLY_PATH, NETWORK_UTIL_WALLY_PATH, MAID_WALLY_PATH, HEADER_WARNING, GET_SUFFIX_KEY, UPDATE_SUFFIX_KEY
+from src.config import get_data_config, SIGNAL_WALLY_PATH, NETWORK_UTIL_WALLY_PATH, MAID_WALLY_PATH, HEADER_WARNING, GET_SUFFIX_KEY, UPDATE_SUFFIX_KEY
 from typing import Any, Literal
 
 def get_if_number_in_path(path: str) -> bool:

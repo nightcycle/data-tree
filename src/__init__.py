@@ -1,8 +1,8 @@
 import sys
-from config import init as config_init
-from server import build as build_server
-from client import build as build_client
-from shared import build as build_shared
+from src.config import init as config_init
+from src.server import build as build_server
+from src.client import build as build_client
+from src.shared import build as build_shared
 from luau.roblox.rojo import build_sourcemap
 
 INIT_TAG = "init"

@@ -5,7 +5,7 @@ from luau.convert import from_dict, mark_as_literal, from_dict_to_type
 from luau.roblox import write_script
 from luau.roblox.wally import require_roblox_wally_package
 from luau.path import get_if_module_script, remove_all_path_variants
-from config import get_data_config, SERVICE_PROXY_PATH, NETWORK_UTIL_WALLY_PATH, MAID_WALLY_PATH, HEADER_WARNING, GET_SUFFIX_KEY, UPDATE_SUFFIX_KEY
+from src.config import get_data_config, SERVICE_PROXY_PATH, NETWORK_UTIL_WALLY_PATH, MAID_WALLY_PATH, HEADER_WARNING, GET_SUFFIX_KEY, UPDATE_SUFFIX_KEY
 
 
 def build():
