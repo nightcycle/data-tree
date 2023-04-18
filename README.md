@@ -28,7 +28,7 @@ You can create basic dynamic values with pre-determined tags such as:
 - DISPLAY_NAME: the user's current display name
 - USER_NAME: the user's account name
 - USER_ID: the user's id
-- GUID: a 32 character unique string usable for identification
+- GUID: a 36 character unique string usable for identification
 
 You can't use them in any keys (your type structure must be static in this ense), but you can use them in values. You'll see examples in the following sections. In order for a tag to be recognized you need to wrap it in curly brackets, for example: "{USER_NAME}".
 
