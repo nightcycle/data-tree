@@ -1,5 +1,5 @@
 import dpath
-from util import get_roblox_type, get_raw_type_name, get_if_optional
+from src.util import get_roblox_type, get_raw_type_name, get_if_optional
 from luau import indent_block
 from luau.convert import from_dict, mark_as_literal, from_dict_to_type
 from luau.roblox import write_script

@@ -1,5 +1,5 @@
 import dpath
-from util import get_if_optional, write_value_from_config, write_standard_value_from_config, get_raw_key_name, get_type_name_from_key, get_roblox_type, get_raw_type_name
+from src.util import get_if_optional, write_value_from_config, write_standard_value_from_config, get_raw_key_name, get_type_name_from_key, get_roblox_type, get_raw_type_name
 from luau import indent_block
 from luau.convert import from_dict, mark_as_literal, from_dict_to_type
 from luau.roblox import write_script
