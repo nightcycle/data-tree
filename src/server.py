@@ -1,6 +1,5 @@
 import dpath
-import json
-from util import get_raw_key_name, get_type_name_from_key, get_roblox_type, get_raw_type_name
+from util import get_if_optional, write_value_from_config, write_standard_value_from_config, get_raw_key_name, get_type_name_from_key, get_roblox_type, get_raw_type_name
 from luau import indent_block
 from luau.convert import from_dict, mark_as_literal, from_dict_to_type
 from luau.roblox import write_script
@@ -8,6 +7,7 @@ from luau.roblox.wally import require_roblox_wally_package
 from luau.roblox.util import get_module_require
 from luau.path import get_if_module_script, remove_all_path_variants
 from config import get_data_config, SIGNAL_WALLY_PATH, NETWORK_UTIL_WALLY_PATH, MAID_WALLY_PATH, HEADER_WARNING, GET_SUFFIX_KEY, UPDATE_SUFFIX_KEY
+from typing import Any, Literal
 
 def get_if_number_in_path(path: str) -> bool:
 	has_num_in_path = False
@@ -18,7 +18,6 @@ def get_if_number_in_path(path: str) -> bool:
 		except:
 			key = key + ""
 	return has_num_in_path
-
 
 def build():
 	config = get_data_config()
@@ -102,6 +101,8 @@ def build():
 			"end",
 		]
 
+	out_variables = {}
+
 	for full_path, value in dpath.search(config["tree"], '**', yielded=True):
 		keys = full_path.split("/")
 		raw_keys = []
@@ -112,23 +113,56 @@ def build():
 				final_type = get_type_name_from_key(key)
 
 		path = "/".join(raw_keys)
+		
 		if final_type != None:
+			var_type = get_raw_type_name(final_type)
+
+			if "List[" in var_type:
+				var_type = (var_type.replace("List[", "")).replace("]", "")
+				var_type = "{[number]:" + var_type + "}"
+			if "Dict[" in var_type:
+				var_type = (var_type.replace("Dict[", "")).replace("]", "")
+				var_type = var_type.replace(",", "]:")
+				var_type = "{[" + var_type + "}"
+			
+			if get_if_optional(final_type):
+				var_type += "?"
+
+			var_name = "tree"+get_raw_key_name(full_path.replace("/", ""))+"Val"
+			typed_var_name = var_name + ": " + var_type
 			if final_type[0:5] == "Enum.":
 				enum_deserializers += write_enum_deserializer(final_type[5:])
+				initial_value = write_value_from_config(value, final_type, config["types"])
+				
+				out_variables[typed_var_name] = initial_value
 				if value == "nil":
-					dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", nil, serializers[\"{final_type}\"], deserializers[\"{final_type}\"])"))
+					dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", {var_name}, serializers[\"{final_type}\"], deserializers[\"{final_type}\"])"))
 				else:
-					dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", {final_type}.{value}, serializers[\"{final_type}\"], deserializers[\"{final_type}\"])"))
+					dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", {var_name}, serializers[\"{final_type}\"], deserializers[\"{final_type}\"])"))
 
 				dpath.new(type_tree, path, mark_as_literal(f"DataHandler<{final_type}, string>"))
 			elif final_type[0:5] == "List[":
 				if not get_if_number_in_path(full_path):
+					initial_value = write_value_from_config(value, final_type, config["types"])
 					inner_type = final_type[5:(len(final_type)-1)]
-					print("LIST", full_path, ": ", inner_type)
+					raw_inner_type = get_raw_type_name(inner_type)
+					out_variables[typed_var_name] = initial_value
+					# print("LIST", full_path, ": ", inner_type)
+					dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", {var_name}, serializeList(serializers[\"{raw_inner_type}\"]), deserializeList(deserializers[\"{raw_inner_type}\"])) :: any"))
+					dpath.new(type_tree, path, mark_as_literal("DataHandler<{[number]: "+inner_type+"}, string>"))
+
 			elif final_type[0:5] == "Dict[":
 				if not get_if_number_in_path(full_path):
+					initial_value = write_value_from_config(value, final_type, config["types"])
 					inner_type = final_type[5:(len(final_type)-1)]
-					print("DICT", full_path, ": ", inner_type.split(","))
+					type_list = inner_type.split(",")
+					# print("DICT", full_path, ": ", type_list)
+					key = type_list[0]
+					val = type_list[1]
+					raw_val = get_raw_type_name(val)
+					out_variables[typed_var_name] = initial_value
+					dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", {var_name}, serializeDict(serializers[\"{raw_val}\"]), deserializeDict(deserializers[\"{raw_val}\"])) :: any"))
+					dpath.new(type_tree, path, mark_as_literal("DataHandler<{["+key+"]: "+val+"}, string>"))
 			else:
 				ro_type = get_roblox_type(final_type)
 				if ro_type == "number":
@@ -139,7 +173,6 @@ def build():
 					dpath.new(type_tree, path, mark_as_literal(f"DataHandler<{ro_type}, string>"))
 		
 		elif type(value) == str:
-		
 			raw_value = get_raw_type_name(value)
 			if raw_value in config["types"]:
 				dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", nil, serializers[\"{raw_value}\"], deserializers[\"{raw_value}\"])"))
@@ -148,21 +181,28 @@ def build():
 				value = value.replace("{DISPLAY_NAME}", f"\"..player.DisplayName..\"")
 				value = value.replace("{USER_NAME}", f"\"..player.Name..\"")
 				value = value.replace("{USER_ID}", f"\"..tostring(player.UserId)..\"")
+				value = value.replace("{GUID}", f"\"..game:GetService(\"HttpService\"):GenerateGUID(false)..\"")
 				dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", \"{value}\")"))
 				dpath.new(type_tree, path, mark_as_literal("DataHandler<string, string>"))
 		elif type(value) == bool:
 			dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", {value})"))
 			dpath.new(type_tree, path, mark_as_literal("DataHandler<boolean, boolean>"))
-		elif type(value) == int or type(value) == float:
-			dpath.new(func_tree, path, mark_as_literal(f"_newNumberHandler(\"{path}\", {value})"))
+		elif type(value) == int:
+			dpath.new(func_tree, path, mark_as_literal(f"_newNumberHandler(\"{path}\", {value}, processors[\"int\"])"))
 			dpath.new(type_tree, path, mark_as_literal("NumberDataHandler"))
-
+		elif type(value) == float:
+			dpath.new(func_tree, path, mark_as_literal(f"_newNumberHandler(\"{path}\", {value}, processors[\"float\"])"))
+			dpath.new(type_tree, path, mark_as_literal("NumberDataHandler"))
 
 	for path, value in dpath.search(config["types"], '**', yielded=True):
 		
 		if type(value) == str:
 			if value[0:5] == "Enum.":
 				enum_deserializers += write_enum_deserializer(value[5:])
+
+	out_variable_content = []
+	for k, v in out_variables.items():
+		out_variable_content.append(f"local {k} = {v}")
 
 	content = [
 		"--!strict",
@@ -245,6 +285,27 @@ def build():
 		"local METADATA = " + from_dict(config["metadata"]),
 		"",
 		"-- Private functions",
+		"function serializeList(unitMethod: (val: any) -> string): ((val: {[number]: any}) -> string)",
+		"	return function(dictVal: {[number]: any})",
+		"		return \"{}\"",
+		"	end",
+		"end",
+		"function deserializeList(unitMethod: (val: string) -> any): ((val: string) -> {[number]: any})",
+		"	return function(dictVal: string)",
+		"		return {}",
+		"	end",
+		"end",
+		"function serializeDict(unitMethod: (val: any) -> string): ((val: {[string]: any}) -> string)",
+		"	return function(dictVal: {[string]: any})",
+		"		return \"{}\"",
+		"	end",
+		"end",
+		"function deserializeDict(unitMethod: (val: string) -> any): ((val: string) -> {[string]: any})",
+		"	return function(dictVal: string)",
+		"		return {}",
+		"	end",
+		"end",
+		""
 		"local processors: {[string]: Processor<number>} = {}",
 		"processors[\"Integer\"] = function(value: number): number",
 		"\treturn math.round(value)",
@@ -857,6 +918,7 @@ def build():
 			]) + [
 			"end",
 			"",
+			] + out_variable_content + [
 			"local tree: DataTree = " + from_dict(func_tree, indent_count=2, add_comma_at_end=False, skip_initial_indent=True),
 			"trees[player.UserId] = tree",
 		]) + [
@@ -909,4 +971,4 @@ def build():
 		]) + [
 		"}",
 	]
-	write_script(build_path, "\n".join(content))
+	write_script(build_path, "\n".join(content), write_as_directory=False)

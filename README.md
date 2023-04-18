@@ -28,6 +28,7 @@ You can create basic dynamic values with pre-determined tags such as:
 - DISPLAY_NAME: the user's current display name
 - USER_NAME: the user's account name
 - USER_ID: the user's id
+- GUID: a 32 character unique string usable for identification
 
 You can't use them in any keys (your type structure must be static in this ense), but you can use them in values. You'll see examples in the following sections. In order for a tag to be recognized you need to wrap it in curly brackets, for example: "{USER_NAME}".
 
@@ -133,7 +134,6 @@ join_time::DateTime:
 	Hour: 22
 	Minute: 30
 	Second: 16
-	Millisecond: 253
 ```
 You don't need to include all of the fields, any not included will default to 0. 
 
@@ -241,24 +241,26 @@ types:
 	VehicleData:
 		Name: string
 		Type: VehicleType
-		Id: int
+		Id: string
 		PurchaseTime: DateTime
 		FrictionCoefficient: double
 		Material: Enum.Material
 		Appearance:
 			Color: Color3
-			Skin: string
+			Skin: string?
 		Performance: PerformanceData
 ```
 
 #### setting tree organization
 Allows you to specify how data is organized for players.
 ```yaml
-tree:
+tree: # the overall structure of the t
 	CompanyName: "{DISPLAY_NAME}'s Company" # you don't always need to specify type, in this case it will guess it is a string
+	Currency:
+		Cash::int: 1000
+		VehicleCredits::int: 5
+	State::Enum.HumanoidStateType: Dead
 	Location::CFrameInteger:
-		PositionIncrement: 10
-		RotationIncrement: 15
 		Position:
 			X: 53
 			Y: 23
@@ -266,16 +268,13 @@ tree:
 		EulerAnglesYXZ:
 			X: 0
 			Y: 2
-			Z: 0	
-	Currency:
-		Cash::int: 1000
-		VehicleCredits::int: 5
+			Z: 0
 	Garage:
 		Slots::List[VehicleData]: [ # this will create a list / array with ordered values
-			{ # you specify initial entries into a 
-				Name: string,
-				Type: VehicleType,
-				Id: integer,
+			{
+				Name: Lightning McCar,
+				Type: Sedan,
+				Id: "{GUID}",
 				FrictionCoefficient: 0.5,
 				Appearance: {
 					Color: {
@@ -283,16 +282,22 @@ tree:
 						G: 128,
 						B: 64
 					},
-					Skin: string,
+					Skin: Lightning,
 				},
 				Performance: {
-					Speed: 2.15,
-					Acceleration: 26.00,
-					TurnSpeed: 12.00,
+					Speed: 12.00,
+					Acceleration: 25.00,
+					TurnSpeed: 5.00,
 				},
 			}
 		]
-		Permissions::Dict[number, PermissionData?]: {}
+		Permissions::Dict[number, PermissionData?]: {
+			12345: {
+				CanDrive: false,
+				CanEdit: true,
+				CanSell: true,
+			}
+		}
 ```
 
 #### setting the metadata
