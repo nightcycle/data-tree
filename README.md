@@ -43,9 +43,9 @@ You can set the name / location of the scripts like this:
 ```yaml
 shared_types_roblox_path: game/ReplicatedStorage/Shared/DataTreeTypes
 out:
-	client_path: out/Client/DataTree.luau # where the client read-only tree is built
-	shared_path: out/Shared/DataTreeTypes.luau # where the server tree is built
-	server_path: out/Server/DataTreeService.luau # where the server tree is built
+  client_path: out/Client/DataTree.luau # where the client read-only tree is built
+  shared_path: out/Shared/DataTreeTypes.luau # where the server tree is built
+  server_path: out/Server/DataTreeService.luau # where the server tree is built
 ```
 shared_types_roblox_path is the in-game path for the type script to allow for the requiring of that module.
 
@@ -58,9 +58,9 @@ Can be constructed various ways:
 RGB:
 ```yaml
 color::Color3:
-	R::int: 125
-	G::int: 255
-	B::int: 64
+  R::int: 125
+  G::int: 255
+  B::int: 64
 ```
 
 Hex code:
@@ -71,9 +71,9 @@ color::Color3: 32a852
 HSV code:
 ```yaml
 color::Color3:
-	H::int: 320 #out of 360
-	S::int: 75
-	V::int: 30
+  H::int: 320 #out of 360
+  S::int: 75
+  V::int: 30
 ```
 
 #### typing Booleans
@@ -128,12 +128,12 @@ join_time::DateTime: 1681697303
 From specificied UTC time:
 ```yaml
 join_time::DateTime:
-	Year: 2023
-	Month: 4
-	Day: 16
-	Hour: 22
-	Minute: 30
-	Second: 16
+  Year: 2023
+  Month: 4
+  Day: 16
+  Hour: 22
+  Minute: 30
+  Second: 16
 ```
 You don't need to include all of the fields, any not included will default to 0. 
 
@@ -141,25 +141,25 @@ You don't need to include all of the fields, any not included will default to 0.
 Vector3 serializes a vector into floats, allowing for precise storage.
 ```yaml
 position::Vector3:
-	X: 534.003463463460
-	Y: 238.346034000001
-	Z: 58346.3463463466
+  X: 534.003463463460
+  Y: 238.346034000001
+  Z: 58346.3463463466
 ```
 
 Vector3Integer serializes a vector into integers, allowing for efficient storage.
 ```yaml
 position::Vector3Integer:
-	X: 534
-	Y: 238
-	Z: 58346
+  X: 534
+  Y: 238
+  Z: 58346
 ```
 
 Vector3Double serializes a vector into doubles, allowing for a balance between efficiency and precision in storage.
 ```yaml
 position::Vector3Double:
-	X: 534.00
-	Y: 238.34
-	Z: 58346.34
+  X: 534.00
+  Y: 238.34
+  Z: 58346.34
 ```
 
 #### typing Vector2, Vector2Integer, Vector2Double
@@ -171,38 +171,38 @@ Allows for the storage of CFrames at varying degrees of precision. Notably the E
 The float variant is defined like so:
 ```yaml
 PlayerCFrame::CFrame:
-	Position:
-		X: 534.003463463460
-		Y: 238.346034000001
-		Z: 58346.3463463466
-	EulerAnglesYXZ:
-		X: 30.003463463460
-		Y: 18.346034000001
-		Z: -96.346346346646
+  Position:
+    X: 534.003463463460
+    Y: 238.346034000001
+    Z: 58346.3463463466
+  EulerAnglesYXZ:
+    X: 30.003463463460
+    Y: 18.346034000001
+    Z: -96.346346346646
 ```
 The integer variant is defined like so:
 ```yaml
 PlayerCFrame::CFrameInteger:
-	Position:
-		X: 534
-		Y: 238
-		Z: 58346
-	EulerAnglesYXZ:
-		X: 30
-		Y: 18
-		Z: -96
+  Position:
+    X: 534
+    Y: 238
+    Z: 58346
+  EulerAnglesYXZ:
+    X: 30
+    Y: 18
+    Z: -96
 ```
 The double variant is defined like so:
 ```yaml
 PlayerCFrame::CFrameDouble:
-	Position:
-		X: 534.00
-		Y: 238.34
-		Z: 58346.34
-	EulerAnglesYXZ:
-		X: 30.00
-		Y: 18.34
-		Z: -96.34
+  Position:
+    X: 534.00
+    Y: 238.34
+    Z: 58346.34
+  EulerAnglesYXZ:
+    X: 30.00
+    Y: 18.34
+    Z: -96.34
 ```
 
 #### typing Roblox Enums:
@@ -226,89 +226,89 @@ If you wish to store custom-types, define those types here with their default va
 
 ```yaml
 types:
-	VehicleType: # custom enums can be created as a list of strings
-		- "Sedan"
-		- "Hatchback"
-		- "Truck"
-	PermissionData:
-		CanDrive: boolean
-		CanEdit: boolean
-		CanSell: boolean
-	PerformanceData:
-		Speed: double
-		Acceleration: double
-		TurnSpeed: double
-	VehicleData:
-		Name: string
-		Type: VehicleType
-		Id: string
-		PurchaseTime: DateTime
-		FrictionCoefficient: double
-		Material: Enum.Material
-		Appearance:
-			Color: Color3
-			Skin: string?
-		Performance: PerformanceData
+  VehicleType: # custom enums can be created as a list of strings
+    - "Sedan"
+    - "Hatchback"
+    - "Truck"
+  PermissionData:
+    CanDrive: boolean
+    CanEdit: boolean
+    CanSell: boolean
+  PerformanceData:
+    Speed: double
+    Acceleration: double
+    TurnSpeed: double
+  VehicleData:
+    Name: string
+    Type: VehicleType
+    Id: string
+    PurchaseTime: DateTime
+    FrictionCoefficient: double
+    Material: Enum.Material
+    Appearance:
+      Color: Color3
+      Skin: string?
+    Performance: PerformanceData
 ```
 
 #### setting tree organization
 Allows you to specify how data is organized for players.
 ```yaml
 tree: # the overall structure of the t
-	CompanyName: "{DISPLAY_NAME}'s Company" # you don't always need to specify type, in this case it will guess it is a string
-	Currency:
-		Cash::int: 1000
-		VehicleCredits::int: 5
-	State::Enum.HumanoidStateType: Dead
-	Location::CFrameInteger:
-		Position:
-			X: 53
-			Y: 23
-			Z: 5834
-		EulerAnglesYXZ:
-			X: 0
-			Y: 2
-			Z: 0
-	Garage:
-		Slots::List[VehicleData]: [ # this will create a list / array with ordered values
-			{
-				Name: Lightning McCar,
-				Type: Sedan,
-				Id: "{GUID}",
-				FrictionCoefficient: 0.5,
-				Appearance: {
-					Color: {
-						R: 256,
-						G: 128,
-						B: 64
-					},
-					Skin: Lightning,
-				},
-				Performance: {
-					Speed: 12.00,
-					Acceleration: 25.00,
-					TurnSpeed: 5.00,
-				},
-			}
-		]
-		Permissions::Dict[number, PermissionData?]: {
-			12345: {
-				CanDrive: false,
-				CanEdit: true,
-				CanSell: true,
-			}
-		}
+  CompanyName: "{DISPLAY_NAME}'s Company" # you don't always need to specify type, in this case it will guess it is a string
+  Currency:
+    Cash::int: 1000
+    VehicleCredits::int: 5
+  State::Enum.HumanoidStateType: Dead
+  Location::CFrameInteger:
+    Position:
+      X: 53
+      Y: 23
+      Z: 5834
+    EulerAnglesYXZ:
+      X: 0
+      Y: 2
+      Z: 0
+  Garage:
+    Slots::List[VehicleData]: [ # this will create a list / array with ordered values
+      {
+        Name: Lightning McCar,
+        Type: Sedan,
+        Id: "{GUID}",
+        FrictionCoefficient: 0.5,
+        Appearance: {
+          Color: {
+            R: 256,
+            G: 128,
+            B: 64
+          },
+          Skin: Lightning,
+        },
+        Performance: {
+          Speed: 12.00,
+          Acceleration: 25.00,
+          TurnSpeed: 5.00,
+        },
+      }
+    ]
+    Permissions::Dict[number, PermissionData?]: {
+      12345: {
+        CanDrive: false,
+        CanEdit: true,
+        CanSell: true,
+      }
+    }
 ```
 
 #### setting the metadata
 You can set the metadata as any dictionary, in this example I'll be using it to set the version:
 ```yaml
 metadata: 
-	saved_at::DateTime: NOW
-	major: 1
-	minor: 2
-	patch: 3
-	
+  saved_at::DateTime: NOW
+  major: 1
+  minor: 2
+  patch: 3
+  
 ```
 
 ### build
