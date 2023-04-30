@@ -1,9 +1,9 @@
 build:
   shared_types_roblox_path: game/ReplicatedStorage/Shared/DataTreeTypes
   out:
-    client_path: out/Client/DataTree.build.lua # where the client read-only tree is built
-    shared_path: out/Shared/DataTreeTypes.build.lua # where the server tree is built
-    server_path: out/Server/DataTreeService.build.lua # where the server tree is built
+    client_path: out/Client/DataTree.lua # where the client read-only tree is built
+    shared_path: out/Shared/DataTreeTypes.lua # where the server tree is built
+    server_path: out/Server/DataTreeService.lua # where the server tree is built
 metadata: 
   saved_at::DateTime: NOW
   major: 1

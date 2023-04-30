@@ -1,2 +1,3 @@
+source env/Scripts/Activate
 sh scripts/to_exe.sh
-dist/datatree.exe build -yaml test/datatree.yaml
+dist/datatree.exe build

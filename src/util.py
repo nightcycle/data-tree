@@ -2,6 +2,8 @@ from luau.convert import from_dict, mark_as_literal
 from typing import Any, Literal
 import json
 import dpath
+import os
+import sys
 
 TYPE_CONVERSIONS = {
 	"Vector3": ["Vector3", "Vector3Integer", "Vector3Double"],
@@ -16,7 +18,7 @@ TYPE_CONVERSIONS = {
 
 KEY_TYPE_MARKER = "::"
 
-AcceptedTypes = Literal[
+AcceptedType = Literal[
 	"boolean",
 	"Color3", 
 	"Double",
@@ -38,9 +40,18 @@ AcceptedTypes = Literal[
 	"CFrameInteger",
 ]
 
+def get_package_zip_path() -> str:
+	base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+	print(base_path)
+	for sub_path in os.listdir(base_path):
+		print(sub_path)
+
+	return os.path.join(base_path, "data\\Packages.zip")
+
 def get_if_standard_type(type_name: str) -> bool:
 	# print("TYPE", type_name)
-	return (type_name in AcceptedTypes.__args__) or (type_name[0:5] == "Enum.")
+	untyped_AcceptedType: Any = AcceptedType
+	return (type_name in untyped_AcceptedType.__args__) or (type_name[0:5] == "Enum.")
 	
 def get_if_optional(type_name: str) -> bool:
 	return type_name[len(type_name)-1] == "?"
@@ -51,7 +62,7 @@ def get_raw_type_name(type_name: str) -> str:
 	else:
 		return type_name
 
-def write_standard_value_from_config(config_val: Any, val_type: Literal) -> str:
+def write_standard_value_from_config(config_val: Any, val_type: AcceptedType) -> str:
 	if config_val == "nil":
 		return "nil"
 	raw_val_type = get_raw_type_name(val_type)
@@ -226,16 +237,20 @@ def write_custom_value_from_config(config_val: Any, type_name: str, config_types
 
 	if "List[" in type_name:
 		out_list = ["{"]
-		inner_type_name = type_name.replace("List[", "").replace("]", "")
+		untyped_inner_type_name: Any = type_name.replace("List[", "").replace("]", "")
+		inner_type_name: AcceptedType = untyped_inner_type_name
 		for v in config_val:
 			out_list.append(write_value_from_config(v, inner_type_name, config_types)+",")
 		out_list.append("}")
+		
 		return "\n".join(out_list)
+
 	elif "Dict[" in type_name:
 		out = {}
 		inner_type_names = ((type_name.replace("Dict[", "")).replace("]", "")).split(",")
 		key_type_name = inner_type_names[0].replace(" ", "")
-		val_type_name = inner_type_names[1].replace(" ", "")
+		untyped_val_type_name: Any = inner_type_names[1].replace(" ", "")
+		val_type_name: AcceptedType = untyped_val_type_name
 		for k, v in config_val.items():
 			if get_roblox_type(key_type_name) == "number":
 				num_str = mark_as_literal(f"[{k}]")
@@ -245,7 +260,8 @@ def write_custom_value_from_config(config_val: Any, type_name: str, config_types
 		return from_dict(out, skip_initial_indent=True)
 	else:
 		raw_type_name = get_raw_type_name(type_name)
-		val_def = config_types[raw_type_name]
+		untyped_val_def: Any = config_types[raw_type_name]
+		val_def: dict = untyped_val_def
 		if type(config_types[raw_type_name]) == list:
 			if config_val in val_def:
 				return f"\"{config_val}\""
@@ -253,8 +269,11 @@ def write_custom_value_from_config(config_val: Any, type_name: str, config_types
 				raise ValueError(f"config val {config_val} is not a valid option for type {raw_type_name}")		
 		else:
 			out = {}
-			for type_path, sub_type_name in dpath.search(val_def, '**', yielded=True):
-				if type(sub_type_name) == str:
+			for type_path, potential_type_name in dpath.search(val_def, '**', yielded=True):
+				
+				if type(potential_type_name) == str:
+					untyped_sub_type_name: Any = potential_type_name
+					sub_type_name: AcceptedType = untyped_sub_type_name
 					current_val = dpath.get(config_val, type_path, default=None)
 					if current_val != None:
 						if get_if_optional(sub_type_name) or current_val != "nil":
@@ -265,7 +284,7 @@ def write_custom_value_from_config(config_val: Any, type_name: str, config_types
 						dpath.new(out, type_path, mark_as_literal("nil"))
 			return from_dict(out, skip_initial_indent=False) + f" :: {raw_type_name}"
 
-def write_value_from_config(config_val: Any, type_name: str, config_types: dict[str, list | dict]) -> str:
+def write_value_from_config(config_val: Any, type_name: AcceptedType, config_types: dict[str, list | dict]) -> str:
 	if get_if_standard_type(get_raw_type_name(type_name)):
 		return write_standard_value_from_config(config_val, type_name)
 	else:
@@ -309,3 +328,5 @@ def get_roblox_type(type_name: str) -> str | None:
 	elif type_name[0:5] == "Enum.":
 		enum_name = type_name.split(".")[1]
 		return "Enum." + enum_name + question_ending
+
+	raise ValueError(f"bad type name: {type_name}")

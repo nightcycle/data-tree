@@ -1,12 +1,11 @@
 import dpath
-from src.util import get_raw_type_name, get_raw_key_name, get_type_name_from_key, get_roblox_type
+from src.util import get_raw_type_name, get_raw_key_name, get_type_name_from_key, get_roblox_type, get_package_zip_path
 from luau import indent_block
 from luau.convert import from_dict, mark_as_literal, from_dict_to_type
-from luau.roblox import write_script
-from luau.roblox.wally import require_roblox_wally_package
+from luau.roblox import write_script, get_package_require
 from luau.roblox.util import get_module_require
 from luau.path import get_if_module_script, remove_all_path_variants
-from src.config import get_data_config, SERVICE_PROXY_PATH, NETWORK_UTIL_WALLY_PATH, MAID_WALLY_PATH, HEADER_WARNING, GET_SUFFIX_KEY, UPDATE_SUFFIX_KEY
+from src.config import get_data_config, HEADER_WARNING, GET_SUFFIX_KEY, UPDATE_SUFFIX_KEY
 
 def build():
 	config = get_data_config()
@@ -61,11 +60,12 @@ def build():
 		"",
 		"--Services",
 		"local RunService = game:GetService(\"RunService\")",
+		"local Players = game:GetService(\"Players\")",
 		"",
 		"--Packages",
-		"local NetworkUtil = " + require_roblox_wally_package(NETWORK_UTIL_WALLY_PATH, is_header=False),
-		"local Maid = " + require_roblox_wally_package(MAID_WALLY_PATH, is_header=False),
-		"local ServiceProxy = " + require_roblox_wally_package(SERVICE_PROXY_PATH, is_header=False),
+		"local NetworkUtil = " + get_package_require("NetworkUtil"),
+		"local Maid = " + get_package_require("Maid"),
+		"local ServiceProxy = " + get_package_require("ServiceProxy"),
 		"",
 		"--Modules",
 		"local DataTypes = " + get_module_require(config["build"]["shared_types_roblox_path"]),
@@ -90,10 +90,10 @@ def build():
 		"		local getKey = scope .. \"_\" .. GET_SUFFIX",
 		"",
 		"		if RunService:IsRunning() then",
-		"			maid:GiveTask(NetworkUtil.onClientEventAt(updateKey, game.Players.LocalPlayer, function(val)",
+		"			maid:GiveTask(NetworkUtil.onClientEventAt(updateKey, Players.LocalPlayer, function(val)",
 		"				values[scope] = val",
 		"			end))",
-		"			values[scope] = NetworkUtil.invokeServerAt(getKey, game.Players.LocalPlayer)",
+		"			values[scope] = NetworkUtil.invokeServerAt(getKey, Players.LocalPlayer)",
 		"		else",
 		"			local bindableEvent = NetworkUtil.getBindableEvent(updateKey)",
 		"			maid:GiveTask(bindableEvent.Event:Connect(function(val)",
@@ -117,4 +117,4 @@ def build():
 		"end)"
 
 	]
-	write_script(build_path, "\n".join(content))
+	write_script(build_path, "\n".join(content), packages_dir_zip_file_path=get_package_zip_path())

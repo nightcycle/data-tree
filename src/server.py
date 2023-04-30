@@ -1,9 +1,8 @@
 import dpath
-from src.util import get_if_optional, write_value_from_config, write_standard_value_from_config, get_raw_key_name, get_type_name_from_key, get_roblox_type, get_raw_type_name
+from src.util import get_package_zip_path, get_if_optional, write_value_from_config, write_standard_value_from_config, get_raw_key_name, get_type_name_from_key, get_roblox_type, get_raw_type_name
 from luau import indent_block
 from luau.convert import from_dict, mark_as_literal, from_dict_to_type
-from luau.roblox import write_script
-from luau.roblox.wally import require_roblox_wally_package
+from luau.roblox import write_script, get_package_require
 from luau.roblox.util import get_module_require
 from luau.path import get_if_module_script, remove_all_path_variants
 from src.config import get_data_config, SIGNAL_WALLY_PATH, NETWORK_UTIL_WALLY_PATH, MAID_WALLY_PATH, HEADER_WARNING, GET_SUFFIX_KEY, UPDATE_SUFFIX_KEY
@@ -42,7 +41,7 @@ def build():
 			serializer_content = [
 				f"serializers[\"{type_name}\"] = function(value: {type_name}): string",
 			]
-			out = {}
+			out: dict = {}
 			for path, value in dpath.search(type_data, '**', yielded=True):
 				if type(value) == str:
 					keys = path.split("/")
@@ -68,7 +67,7 @@ def build():
 				f"deserializers[\"{type_name}\"] = function(value: string): {type_name}",
 				"\tlocal data = HttpService:JSONDecode(value)",
 			]
-			out = {}
+			out: dict = {}
 			for path, value in dpath.search(type_data, '**', yielded=True):
 				if type(value) == str:
 					keys = path.split("/")
@@ -215,9 +214,9 @@ def build():
 		"local HttpService = game:GetService(\"HttpService\")",
 		"",
 		"--Packages",
-		"local NetworkUtil = " + require_roblox_wally_package(NETWORK_UTIL_WALLY_PATH, is_header=False),
-		"local Maid = " + require_roblox_wally_package(MAID_WALLY_PATH, is_header=False),
-		"local Signal = " + require_roblox_wally_package(SIGNAL_WALLY_PATH, is_header=False),
+		"local NetworkUtil = " + get_package_require("NetworkUtil"),
+		"local Maid = " + get_package_require("Maid"),
+		"local Signal = " + get_package_require("Signal"),
 		"",
 		"--Modules",
 		"local DataTypes = " + get_module_require(config["build"]["shared_types_roblox_path"]),
@@ -941,8 +940,8 @@ def build():
 				"end",
 				"",
 				"maid:GiveTask(Players.PlayerAdded:Connect(onPlayerAdded))",
-				"for i, player in ipairs(game.Players:GetChildren()) do",
-				"\tonPlayerAdded(player)",
+				"for i, player in ipairs(Players:GetChildren()) do",
+				"\tonPlayerAdded(player :: Player)",
 				"end",
 				"",
 				"return nil",
@@ -971,4 +970,4 @@ def build():
 		]) + [
 		"}",
 	]
-	write_script(build_path, "\n".join(content), write_as_directory=False)
+	write_script(build_path, "\n".join(content), packages_dir_zip_file_path=get_package_zip_path())

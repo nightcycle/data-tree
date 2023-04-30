@@ -30,7 +30,7 @@ jobs:
           - os: windows-latest
             exe_name: datatree.exe
             asset_content_type: application/octet-stream
-            build_command: pyinstaller --onefile src/__init__.py -n datatree
+            build_command: pyinstaller --onefile src/__init__.py -n datatree --additional-hooks-dir=hooks --add-data "src/data/Packages.zip;data/"
             zip_suffix: -win64
 
     runs-on: ${{ matrix.os }}

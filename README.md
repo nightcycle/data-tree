@@ -16,6 +16,7 @@ I feel this is a better solution for any developer willing to embrace automated 
 
 ## how does it work?
 After downloading with foreman / aftman, follow these steps to set-up your game.
+
 ### initialize
 In your console run this command:
 ```sh

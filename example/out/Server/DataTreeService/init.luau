@@ -8,9 +8,9 @@ local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 
 --Packages
-local NetworkUtil = require(game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("NetworkUtil"))
-local Maid = require(game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("Maid"))
-local Signal = require(game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("Signal"))
+local NetworkUtil = require(script:WaitForChild("Packages"):WaitForChild("NetworkUtil"))
+local Maid = require(script:WaitForChild("Packages"):WaitForChild("Maid"))
+local Signal = require(script:WaitForChild("Packages"):WaitForChild("Signal"))
 
 --Modules
 local DataTypes = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("DataTreeTypes"))
@@ -25,8 +25,8 @@ export type VehicleData = DataTypes.VehicleData
 export type UserId = number
 export type UserIdKey = string
 type Processor<V> = (val: V) -> V
-type Serializer<D,S> = (data: D) -> S
-type Deserializer<S,D> = (data: S) -> D
+type Serializer<D, S> = (data: D) -> S
+type Deserializer<S, D> = (data: S) -> D
 export type DataHandler<T, S> = {
 	__index: DataHandler<T, S>,
 	_Maid: Maid,
@@ -43,7 +43,13 @@ export type DataHandler<T, S> = {
 	SetOptions: DataStoreSetOptions,
 	IncrementOptions: DataStoreIncrementOptions,
 	init: (maid: Maid) -> nil,
-	new: (player: Player, scope: string, initialValue: T, serializer: Serializer<T,S>?, deserializer: Deserializer<S,T>?) -> DataHandler<T, S>,
+	new: (
+		player: Player,
+		scope: string,
+		initialValue: T,
+		serializer: Serializer<T, S>?,
+		deserializer: Deserializer<S, T>?
+	) -> DataHandler<T, S>,
 	Destroy: (self: DataHandler<T, S>) -> nil,
 	Get: (self: DataHandler<T, S>, force: boolean?) -> (T?, boolean),
 	Set: (self: DataHandler<T, S>, data: T, force: boolean?) -> boolean,
@@ -74,8 +80,8 @@ export type DataTree = {
 		VehicleCredits: NumberDataHandler,
 	},
 	Garage: {
-		Slots: DataHandler<{[number]: VehicleData}, string>,
-		Permissions: DataHandler<{[number]:  PermissionData?}, string>,
+		Slots: DataHandler<{ [number]: VehicleData }, string>,
+		Permissions: DataHandler<{ [number]: PermissionData? }, string>,
 	},
 }
 
@@ -94,33 +100,33 @@ local METADATA = {
 }
 
 -- Private functions
-function serializeList(unitMethod: (val: any) -> string): ((val: {[number]: any}) -> string)
-	return function(dictVal: {[number]: any})
+function serializeList(unitMethod: (val: any) -> string): ((val: { [number]: any }) -> string)
+	return function(dictVal: { [number]: any })
 		return "{}"
 	end
 end
-function deserializeList(unitMethod: (val: string) -> any): ((val: string) -> {[number]: any})
+function deserializeList(unitMethod: (val: string) -> any): ((val: string) -> { [number]: any })
 	return function(dictVal: string)
 		return {}
 	end
 end
-function serializeDict(unitMethod: (val: any) -> string): ((val: {[string]: any}) -> string)
-	return function(dictVal: {[string]: any})
+function serializeDict(unitMethod: (val: any) -> string): ((val: { [string]: any }) -> string)
+	return function(dictVal: { [string]: any })
 		return "{}"
 	end
 end
-function deserializeDict(unitMethod: (val: string) -> any): ((val: string) -> {[string]: any})
+function deserializeDict(unitMethod: (val: string) -> any): ((val: string) -> { [string]: any })
 	return function(dictVal: string)
 		return {}
 	end
 end
-local processors: {[string]: Processor<number>} = {}
+local processors: { [string]: Processor<number> } = {}
 processors["Integer"] = function(value: number): number
 	return math.round(value)
 end
 processors["int"] = processors["Integer"]
 processors["Double"] = function(value: number): number
-	return math.round(value*100)/100
+	return math.round(value * 100) / 100
 end
 processors["double"] = processors["Double"]
 processors["Float"] = function(value: number): number
@@ -128,9 +134,7 @@ processors["Float"] = function(value: number): number
 end
 processors["float"] = processors["Float"]
 
-
-
-local serializers: {[string]: Serializer<any, any>} = {}
+local serializers: { [string]: Serializer<any, any> } = {}
 serializers["Color3"] = function(value: Color3): string
 	return value:ToHex()
 end
@@ -150,57 +154,57 @@ serializers["Vector3"] = function(value: Vector3): string
 	return HttpService:JSONEncode({
 		X = value.X,
 		Y = value.Y,
-		Z = value.Z
+		Z = value.Z,
 	})
 end
 serializers["Vector3Integer"] = function(value: Vector3): string
 	return HttpService:JSONEncode({
 		X = math.round(value.X),
 		Y = math.round(value.Y),
-		Z = math.round(value.Z)
+		Z = math.round(value.Z),
 	})
 end
 serializers["Vector3Double"] = function(value: Vector3): string
 	return HttpService:JSONEncode({
-		X = math.round(value.X*100)/100,
-		Y = math.round(value.Y*100)/100,
-		Z = math.round(value.Z*100)/100
+		X = math.round(value.X * 100) / 100,
+		Y = math.round(value.Y * 100) / 100,
+		Z = math.round(value.Z * 100) / 100,
 	})
 end
 serializers["Vector2"] = function(value: Vector2): string
 	return HttpService:JSONEncode({
 		X = value.X,
-		Y = value.Y
+		Y = value.Y,
 	})
 end
 serializers["Vector2Integer"] = function(value: Vector2): string
 	return HttpService:JSONEncode({
 		X = math.round(value.X),
-		Y = math.round(value.Y)
+		Y = math.round(value.Y),
 	})
 end
 serializers["Vector2Double"] = function(value: Vector2): string
 	return HttpService:JSONEncode({
-		X = math.round(value.X*100)/100,
-		Y = math.round(value.Y*100)/100
+		X = math.round(value.X * 100) / 100,
+		Y = math.round(value.Y * 100) / 100,
 	})
 end
 serializers["CFrame"] = function(value: CFrame): string
-	local x,y,z = value:ToEulerAnglesYXZ()
+	local x, y, z = value:ToEulerAnglesYXZ()
 	return HttpService:JSONEncode({
 		Position = serializers["Vector3"](value.Position),
 		Orientation = serializers["Vector3"](Vector3.new(math.deg(x), math.deg(y), math.deg(z))),
 	})
 end
 serializers["CFrameDouble"] = function(value: CFrame): string
-	local x,y,z = value:ToEulerAnglesYXZ()
+	local x, y, z = value:ToEulerAnglesYXZ()
 	return HttpService:JSONEncode({
 		Position = serializers["Vector3Double"](value.Position),
 		Orientation = serializers["Vector3Double"](Vector3.new(math.deg(x), math.deg(y), math.deg(z))),
 	})
 end
 serializers["CFrameInteger"] = function(value: CFrame): string
-	local x,y,z = value:ToEulerAnglesYXZ()
+	local x, y, z = value:ToEulerAnglesYXZ()
 	return HttpService:JSONEncode({
 		Position = serializers["Vector3Integer"](value.Position),
 		Orientation = serializers["Vector3Integer"](Vector3.new(math.deg(x), math.deg(y), math.deg(z))),
@@ -239,9 +243,7 @@ serializers["VehicleData"] = function(value: VehicleData): string
 	}) :: any
 end
 
-
-
-local deserializers: {[string]: Deserializer<any, any>} = {}
+local deserializers: { [string]: Deserializer<any, any> } = {}
 deserializers["string"] = function(value: string): string
 	return value
 end
@@ -267,7 +269,7 @@ deserializers["Vector3Integer"] = function(value: string): Vector3
 end
 deserializers["Vector3Double"] = function(value: string): Vector3
 	local data = HttpService:JSONDecode(value)
-	return Vector3.new(math.round(data.X*100)/100, math.round(data.Y*100)/100, math.round(data.Z*100)/100)
+	return Vector3.new(math.round(data.X * 100) / 100, math.round(data.Y * 100) / 100, math.round(data.Z * 100) / 100)
 end
 deserializers["Vector2"] = function(value: string): Vector2
 	local data = HttpService:JSONDecode(value)
@@ -279,7 +281,7 @@ deserializers["Vector2Integer"] = function(value: string): Vector2
 end
 deserializers["Vector2Double"] = function(value: string): Vector2
 	local data = HttpService:JSONDecode(value)
-	return Vector2.new(math.round(data.X*100)/100, math.round(data.Y*100)/100)
+	return Vector2.new(math.round(data.X * 100) / 100, math.round(data.Y * 100) / 100)
 end
 deserializers["CFrame"] = function(value: string): CFrame
 	local data = HttpService:JSONDecode(value)
@@ -303,18 +305,26 @@ deserializers["CFrameDouble"] = function(value: string): CFrame
 	local data = HttpService:JSONDecode(value)
 	local position = deserializers["Vector3Double"](data["Position"])
 	return CFrame.fromEulerAnglesYXZ(
-		math.rad(math.round(data.Orientation.X*100)/100),
-		math.rad(math.round(data.Orientation.Y*100)/100),
-		math.rad(math.round(data.Orientation.Z*100)/100)
+		math.rad(math.round(data.Orientation.X * 100) / 100),
+		math.rad(math.round(data.Orientation.Y * 100) / 100),
+		math.rad(math.round(data.Orientation.Z * 100) / 100)
 	) + position
 end
 deserializers["Enum.HumanoidStateType"] = function(value: number): Enum.HumanoidStateType
-	for i, enumItem in ipairs(Enum.HumanoidStateType:GetEnumItems()) do if enumItem.Value == value then return enumItem end end
-error("No enum item found in HumanoidStateType for value "..tostring(value))
+	for i, enumItem in ipairs(Enum.HumanoidStateType:GetEnumItems()) do
+		if enumItem.Value == value then
+			return enumItem
+		end
+	end
+	error("No enum item found in HumanoidStateType for value " .. tostring(value))
 end
 deserializers["Enum.Material"] = function(value: number): Enum.Material
-	for i, enumItem in ipairs(Enum.Material:GetEnumItems()) do if enumItem.Value == value then return enumItem end end
-error("No enum item found in Material for value "..tostring(value))
+	for i, enumItem in ipairs(Enum.Material:GetEnumItems()) do
+		if enumItem.Value == value then
+			return enumItem
+		end
+	end
+	error("No enum item found in Material for value " .. tostring(value))
 end
 deserializers["PermissionData"] = function(value: string): PermissionData
 	local data = HttpService:JSONDecode(value)
@@ -357,7 +367,7 @@ function DataHandler:Destroy()
 	if not self._IsAlive then
 		return
 	end
-	
+
 	self._IsAlive = false
 	self:Set(self._Value, true)
 	self._Maid:Destroy()
@@ -392,16 +402,16 @@ function DataHandler:Set(data: any, force: boolean?)
 	else
 		success = true
 	end
-		if data then
-			self._EncodedValue = self._Serialize(data)
-		else
-			self._EncodedValue = nil
-		end
-		if self._EncodedValue then
-			self._Value = self._Deserialize(self._EncodedValue)
-		else
-			self._Value = nil
-		end
+	if data then
+		self._EncodedValue = self._Serialize(data)
+	else
+		self._EncodedValue = nil
+	end
+	if self._EncodedValue then
+		self._Value = self._Deserialize(self._EncodedValue)
+	else
+		self._Value = nil
+	end
 	if initialValue ~= data then
 		self.OnChanged:Fire(self._Value)
 	end
@@ -410,7 +420,7 @@ end
 function DataHandler:Update(transformer: (any) -> any, force: boolean?)
 	local initialValue = self._EncodedValue
 	local function transformerWrapper(rawValue: any)
-		 return self._Serialize(transformer(self._Deserialize(rawValue)))
+		return self._Serialize(transformer(self._Deserialize(rawValue)))
 	end
 	local function update()
 		local value = self._EncodedValue
@@ -422,7 +432,7 @@ function DataHandler:Update(transformer: (any) -> any, force: boolean?)
 		end
 		return value, success
 	end
-	
+
 	local value, success
 	if force then
 		local attempts = 0
@@ -444,11 +454,11 @@ function DataHandler:Update(transformer: (any) -> any, force: boolean?)
 			self._EncodedValue = nil
 		end
 	end
-		if self._EncodedValue then
-			self._Value = self._Deserialize(self._EncodedValue)
-		else
-			self._Value = nil
-		end
+	if self._EncodedValue then
+		self._Value = self._Deserialize(self._EncodedValue)
+	else
+		self._Value = nil
+	end
 	if initialValue ~= value then
 		self.OnChanged:Fire(self._Value)
 	end
@@ -459,7 +469,7 @@ function DataHandler:Get(force: boolean?): (any?, boolean)
 	if self._Value ~= nil and not force then
 		return self._Value, true
 	end
-	
+
 	local function get()
 		local data
 		local success, msg = pcall(function()
@@ -470,7 +480,7 @@ function DataHandler:Get(force: boolean?): (any?, boolean)
 		end
 		return data, success
 	end
-	
+
 	local data, success
 	local attempts = 0
 	repeat
@@ -480,7 +490,7 @@ function DataHandler:Get(force: boolean?): (any?, boolean)
 			task.wait(RETRY_DELAY)
 		end
 	until success or attempts > RETRY_LIMIT
-	
+
 	if success then
 		self._EncodedValue = data
 		if self._EncodedValue then
@@ -489,28 +499,42 @@ function DataHandler:Get(force: boolean?): (any?, boolean)
 			self._Value = nil
 		end
 	end
-	
+
 	return self._Value, success
 end
 
-function DataHandler.new(player: Player, scope: string, initialValue: any, serializer: Serializer<any, string>?, deserializer: Deserializer<string, any>?)
+function DataHandler.new(
+	player: Player,
+	scope: string,
+	initialValue: any,
+	serializer: Serializer<any, string>?,
+	deserializer: Deserializer<string, any>?
+)
 	local maid = Maid.new()
-	
+
 	local dataStoreOptions = Instance.new("DataStoreOptions")
 	maid:GiveTask(dataStoreOptions)
-	
+
 	local setOptions = Instance.new("DataStoreSetOptions")
 	maid:GiveTask(setOptions)
 	setOptions:SetMetadata(METADATA)
-	
+
 	local onChanged = Signal.new()
 	maid:GiveTask(onChanged)
-	
+
 	local self: DataHandler<any, string> = setmetatable({
 		_Maid = maid,
 		_IsAlive = true,
-		_Serialize = if serializer then serializer else function(v: any) return v end,
-		_Deserialize = if deserializer then deserializer else function(v: any) return v end,
+		_Serialize = if serializer
+			then serializer
+			else function(v: any)
+				return v
+			end,
+		_Deserialize = if deserializer
+			then deserializer
+			else function(v: any)
+				return v
+			end,
 		OnChanged = onChanged,
 		DataStore = if not RunService:IsStudio()
 			then DataStoreService:GetDataStore(BASE_DOMAIN, scope, dataStoreOptions)
@@ -520,15 +544,15 @@ function DataHandler.new(player: Player, scope: string, initialValue: any, seria
 		SetOptions = setOptions,
 		Player = player,
 	}, DataHandler) :: any
-	
+
 	if RunService:IsRunning() then
 		local updateEvent = NetworkUtil.getRemoteEvent(scope .. "_" .. UPDATE_SUFFIX, player)
 		maid:GiveTask(updateEvent)
-		
+
 		maid:GiveTask(onChanged:Connect(function(v: any)
 			updateEvent:FireClient(player, v)
 		end))
-		
+
 		local getFunction = NetworkUtil.getRemoteFunction(scope .. "_" .. GET_SUFFIX, player)
 		maid:GiveTask(getFunction)
 		getFunction.OnServerInvoke = function(plr: Player)
@@ -540,20 +564,20 @@ function DataHandler.new(player: Player, scope: string, initialValue: any, seria
 	else
 		local updateEvent = NetworkUtil.getBindableEvent(scope .. "_" .. UPDATE_SUFFIX)
 		maid:GiveTask(updateEvent)
-		
+
 		maid:GiveTask(onChanged:Connect(function(v: any)
 			updateEvent:Fire(v)
 		end))
-		
+
 		local getFunction = NetworkUtil.getBindableFunction(scope .. "_" .. GET_SUFFIX)
 		maid:GiveTask(getFunction)
 		getFunction.OnInvoke = function()
 			return self._Value
 		end
 	end
-	
+
 	self._Value = self:Get(true)
-	
+
 	return self
 end
 
@@ -564,11 +588,11 @@ setmetatable(NumberDataHandler, DataHandler)
 -- @TODO
 function NumberDataHandler:GetSortedList(player: Player, limit: number, isAscending: boolean)
 	local pages = self.Datastore:GetSortedAsync(isAscending, PAGE_LENGTH)
-	
+
 	local list: { [number]: SortedDataEntry } = {}
 	local function dumpPages()
 		local page = pages:GetCurrentPage()
-		
+
 		for rank: number, data in ipairs(page) do
 			if #list >= limit then
 				break
@@ -580,7 +604,7 @@ function NumberDataHandler:GetSortedList(player: Player, limit: number, isAscend
 				Value = value,
 			})
 		end
-		
+
 		local success
 		local attempts = 0
 		repeat
@@ -590,14 +614,14 @@ function NumberDataHandler:GetSortedList(player: Player, limit: number, isAscend
 				task.wait(RETRY_DELAY)
 			end
 		until success or attempts > RETRY_LIMIT
-		
+
 		if success and #list < limit then
 			pages:AdvanceToNextPageAsync()
 			dumpPages()
 		end
 	end
 	dumpPages()
-	
+
 	return list
 end
 
@@ -614,9 +638,9 @@ function NumberDataHandler:Increment(delta: number, force: boolean?)
 		end
 		return value, success
 	end
-	
+
 	local value, success
-	
+
 	if force then
 		local attempts = 0
 		repeat
@@ -628,7 +652,8 @@ function NumberDataHandler:Increment(delta: number, force: boolean?)
 		until success or attempts > RETRY_LIMIT
 		if success then
 			self._EncodedValue = value
-			self._Value = self.Deserialize(self._EncodedValue)end
+			self._Value = self.Deserialize(self._EncodedValue)
+		end
 	else
 		local val: number = self._EncodedValue
 		val += delta
@@ -636,84 +661,113 @@ function NumberDataHandler:Increment(delta: number, force: boolean?)
 		self._Value = self.Deserialize(self._EncodedValue)
 		success = true
 	end
-	
+
 	if success and delta ~= 0 then
 		self.OnChanged:Fire(self._Value)
 	end
-	
+
 	return self._Value, success
 end
 
-function NumberDataHandler.new(player: Player, scope: string, initialValue: number, processor: Processor<number>?): NumberDataHandler
-	local self: NumberDataHandler = setmetatable(DataHandler.new(player, scope, initialValue, processor :: any, processor :: any), NumberDataHandler) :: any
-	
+function NumberDataHandler.new(
+	player: Player,
+	scope: string,
+	initialValue: number,
+	processor: Processor<number>?
+): NumberDataHandler
+	local self: NumberDataHandler = setmetatable(
+		DataHandler.new(player, scope, initialValue, processor :: any, processor :: any),
+		NumberDataHandler
+	) :: any
+
 	self.DataStore = if not RunService:IsStudio()
 		then DataStoreService:GetOrderedDataStore(BASE_DOMAIN, scope)
 		else nil :: any
-	
+
 	local incrementOptions = Instance.new("DataStoreIncrementOptions")
 	self._Maid:GiveTask(incrementOptions)
-	
+
 	incrementOptions:SetMetadata(METADATA)
 	self.IncrementOptions = incrementOptions
-	
+
 	return self
 end
 local trees: { [number]: any } = {}
 
 function initPlayer(playerMaid: Maid, player: Player)
-	local function _newDataHandler<G, S>(path: string, val: any, serializer: Serializer<G,S>?, deserializer: Deserializer<S, G>?): DataHandler<G, S>
-		local handler: DataHandler<G,S> = DataHandler.new(player, path, val, serializer :: any, deserializer :: any) :: any
+	local function _newDataHandler<G, S>(
+		path: string,
+		val: any,
+		serializer: Serializer<G, S>?,
+		deserializer: Deserializer<S, G>?
+	): DataHandler<G, S>
+		local handler: DataHandler<G, S> =
+			DataHandler.new(player, path, val, serializer :: any, deserializer :: any) :: any
 		playerMaid:GiveTask(handler)
-		
+
 		return handler
 	end
-	
+
 	local function _newNumberHandler(path: string, val: number, processor: Processor<number>?): NumberDataHandler
 		local handler: NumberDataHandler = NumberDataHandler.new(player, path, val, processor) :: any
 		playerMaid:GiveTask(handler)
-		
+
 		return handler
 	end
-	
+
 	local treeStateVal: Enum.HumanoidStateType = Enum.HumanoidStateType.Dead
-	local treeGarageSlotsVal: {[number]:VehicleData} = {
-{
-	["Name"] = "Lightning McCar",
-	["Type"] = "Sedan",
-	["Id"] = ""..game:GetService("HttpService"):GenerateGUID(false).."",
-	["FrictionCoefficient"] = math.round(100*0.5)/100,
-	["Performance"] = {
-	["Speed"] = math.round(100*12.0)/100,
-	["Acceleration"] = math.round(100*25.0)/100,
-	["TurnSpeed"] = math.round(100*5.0)/100,
-} :: PerformanceData,
-	["Appearance"] = {
-		["Color"] = Color3.fromRGB(256, 128, 64),
-		["Skin"] = "Lightning",
-	},
-} :: VehicleData,
-}
-	local treeGaragePermissionsVal: {[number]: PermissionData?} = {
-	[12345] = {
-	["CanDrive"] = false,
-	["CanEdit"] = true,
-	["CanSell"] = true,
-} :: PermissionData,
-}
+	local treeGarageSlotsVal: { [number]: VehicleData } = {
+		{
+			["Name"] = "Lightning McCar",
+			["Type"] = "Sedan",
+			["Id"] = "" .. game:GetService("HttpService"):GenerateGUID(false) .. "",
+			["FrictionCoefficient"] = math.round(100 * 0.5) / 100,
+			["Performance"] = {
+				["Speed"] = math.round(100 * 12.0) / 100,
+				["Acceleration"] = math.round(100 * 25.0) / 100,
+				["TurnSpeed"] = math.round(100 * 5.0) / 100,
+			} :: PerformanceData,
+			["Appearance"] = {
+				["Color"] = Color3.fromRGB(256, 128, 64),
+				["Skin"] = "Lightning",
+			},
+		} :: VehicleData,
+	}
+	local treeGaragePermissionsVal: { [number]: PermissionData? } = {
+		[12345] = {
+			["CanDrive"] = false,
+			["CanEdit"] = true,
+			["CanSell"] = true,
+		} :: PermissionData,
+	}
 	local tree: DataTree = {
-			["CompanyName"] = _newDataHandler("CompanyName", ""..player.DisplayName.."'s Company"),
-			["State"] = _newDataHandler("State", treeStateVal, serializers["Enum.HumanoidStateType"], deserializers["Enum.HumanoidStateType"]),
-			["Location"] = _newDataHandler("Location"),
-			["Currency"] = {
-				["Cash"] = _newNumberHandler("Currency/Cash", 1000, processors["int"]),
-				["VehicleCredits"] = _newNumberHandler("Currency/VehicleCredits", 5, processors["int"]),
-			},
-			["Garage"] = {
-				["Slots"] = _newDataHandler("Garage/Slots", treeGarageSlotsVal, serializeList(serializers["VehicleData"]), deserializeList(deserializers["VehicleData"])) :: any,
-				["Permissions"] = _newDataHandler("Garage/Permissions", treeGaragePermissionsVal, serializeDict(serializers[" PermissionData"]), deserializeDict(deserializers[" PermissionData"])) :: any,
-			},
-		}
+		["CompanyName"] = _newDataHandler("CompanyName", "" .. player.DisplayName .. "'s Company"),
+		["State"] = _newDataHandler(
+			"State",
+			treeStateVal,
+			serializers["Enum.HumanoidStateType"],
+			deserializers["Enum.HumanoidStateType"]
+		),
+		["Location"] = _newDataHandler("Location"),
+		["Currency"] = {
+			["Cash"] = _newNumberHandler("Currency/Cash", 1000, processors["int"]),
+			["VehicleCredits"] = _newNumberHandler("Currency/VehicleCredits", 5, processors["int"]),
+		},
+		["Garage"] = {
+			["Slots"] = _newDataHandler(
+				"Garage/Slots",
+				treeGarageSlotsVal,
+				serializeList(serializers["VehicleData"]),
+				deserializeList(deserializers["VehicleData"])
+			) :: any,
+			["Permissions"] = _newDataHandler(
+				"Garage/Permissions",
+				treeGaragePermissionsVal,
+				serializeDict(serializers[" PermissionData"]),
+				deserializeDict(deserializers[" PermissionData"])
+			) :: any,
+		},
+	}
 	trees[player.UserId] = tree
 end
 
@@ -728,12 +782,12 @@ return {
 				playerMaid:Destroy()
 			end))
 		end
-		
+
 		maid:GiveTask(Players.PlayerAdded:Connect(onPlayerAdded))
-		for i, player in ipairs(game.Players:GetChildren()) do
-			onPlayerAdded(player)
+		for i, player in ipairs(Players:GetChildren()) do
+			onPlayerAdded(player :: Player)
 		end
-		
+
 		return nil
 	end,
 	get = function(userId: number, yieldDuration: number?): DataTree?

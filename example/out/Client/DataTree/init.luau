@@ -3,11 +3,12 @@
 
 --Services
 local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
 
 --Packages
-local NetworkUtil = require(game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("NetworkUtil"))
-local Maid = require(game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("Maid"))
-local ServiceProxy = require(game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("ServiceProxy"))
+local NetworkUtil = require(script:WaitForChild("Packages"):WaitForChild("NetworkUtil"))
+local Maid = require(script:WaitForChild("Packages"):WaitForChild("Maid"))
+local ServiceProxy = require(script:WaitForChild("Packages"):WaitForChild("ServiceProxy"))
 
 --Modules
 local DataTypes = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("DataTreeTypes"))
@@ -30,8 +31,8 @@ export type DataTree = {
 		VehicleCredits: Receiver<number>,
 	},
 	Garage: {
-		Slots: Receiver<{[number]: VehicleData}>,
-		Permissions: Receiver<{[number]: PermissionData?}>,
+		Slots: Receiver<{ [number]: VehicleData }>,
+		Permissions: Receiver<{ [number]: PermissionData? }>,
 	},
 }
 
@@ -48,10 +49,10 @@ function tree.init(maid: Maid): nil
 		local getKey = scope .. "_" .. GET_SUFFIX
 
 		if RunService:IsRunning() then
-			maid:GiveTask(NetworkUtil.onClientEventAt(updateKey, game.Players.LocalPlayer, function(val)
+			maid:GiveTask(NetworkUtil.onClientEventAt(updateKey, Players.LocalPlayer, function(val)
 				values[scope] = val
 			end))
-			values[scope] = NetworkUtil.invokeServerAt(getKey, game.Players.LocalPlayer)
+			values[scope] = NetworkUtil.invokeServerAt(getKey, Players.LocalPlayer)
 		else
 			local bindableEvent = NetworkUtil.getBindableEvent(updateKey)
 			maid:GiveTask(bindableEvent.Event:Connect(function(val)
@@ -78,7 +79,9 @@ function tree.init(maid: Maid): nil
 			["Slots"] = newReceiver("Garage/Slots"),
 			["Permissions"] = newReceiver("Garage/Permissions"),
 		},
-		["init"] = function(maid: Maid) return nil end,
+		["init"] = function(maid: Maid)
+			return nil
+		end,
 	}
 	return nil
 end
