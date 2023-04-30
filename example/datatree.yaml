@@ -1,0 +1,79 @@
+build:
+  shared_types_roblox_path: game/ReplicatedStorage/Shared/DataTreeTypes
+  out:
+    client_path: out/Client/DataTree.build.luau # where the client read-only tree is built
+    shared_path: out/Shared/DataTreeTypes.build.luau # where the server tree is built
+    server_path: out/Server/DataTreeService.build.luau # where the server tree is built
+metadata: 
+  saved_at::DateTime: NOW
+  major: 1
+  minor: 2
+  patch: 3
+types:
+  VehicleType: # custom enums can be created as a list of strings
+    - "Sedan"
+    - "Hatchback"
+    - "Truck"
+  PermissionData:
+    CanDrive: boolean
+    CanEdit: boolean
+    CanSell: boolean
+  PerformanceData:
+    Speed: double
+    Acceleration: double
+    TurnSpeed: double
+  VehicleData:
+    Name: string
+    Type: VehicleType
+    Id: string
+    PurchaseTime: DateTime
+    FrictionCoefficient: double
+    Material: Enum.Material
+    Appearance:
+      Color: Color3
+      Skin: string?
+    Performance: PerformanceData
+tree: # the overall structure of the t
+  CompanyName: "{DISPLAY_NAME}'s Company" # you don't always need to specify type, in this case it will guess it is a string
+  Currency:
+    Cash::int: 1000
+    VehicleCredits::int: 5
+  State::Enum.HumanoidStateType: Dead
+  Location::CFrameInteger:
+    Position:
+      X: 53
+      Y: 23
+      Z: 5834
+    EulerAnglesYXZ:
+      X: 0
+      Y: 2
+      Z: 0
+  Garage:
+    Slots::List[VehicleData]: [ # this will create a list / array with ordered values
+      {
+        Name: Lightning McCar,
+        Type: Sedan,
+        Id: "{GUID}",
+        FrictionCoefficient: 0.5,
+        Appearance: {
+          Color: {
+            R: 256,
+            G: 128,
+            B: 64
+          },
+          Skin: Lightning,
+        },
+        Performance: {
+          Speed: 12.00,
+          Acceleration: 25.00,
+          TurnSpeed: 5.00,
+        },
+      }
+    ]
+    Permissions::Dict[number, PermissionData?]: {
+      12345: {
+        CanDrive: false,
+        CanEdit: true,
+        CanSell: true,
+      }
+    }
