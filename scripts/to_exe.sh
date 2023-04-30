@@ -1,1 +1,1 @@
-pyinstaller --onefile src/__init__.py -n datatree
+pyinstaller --onefile src/__init__.py -n datatree --additional-hooks-dir=hooks

@@ -1,6 +1,6 @@
 # datatree
 ## what is this?
-This is a command line tool, downloadable with foreman / aftman, that allows you to define a data structure for players and have it generate the scripts supporting the reading / writing of player data as well as replicating it to the client of relevant players.
+This is a command line tool, downloadable with foreman / aftman, that allows you to define a data structure for players and have it generate the scripts supporting the reading / writing of player data as well as replicating it to the client of relevant players. To see what those final scripts look like check out the "example/out" directory, as well as "example/datatree.yaml" to get an idea of the kind of configuration that resulted in those scripts.
 
 ## why make this?
 I want to solve a few problems:
