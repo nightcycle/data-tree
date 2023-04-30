@@ -68,5 +68,5 @@ def build() -> None:
 		"return {}",
 	]
 
-	write_script(build_path, "\n".join(content))
+	write_script(build_path, "\n".join(content), skip_source_map=True)
 	return None

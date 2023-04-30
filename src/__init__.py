@@ -1,4 +1,5 @@
 import sys
+import multiprocessing
 from src.config import init as config_init
 from src.server import build as build_server
 from src.client import build as build_client
@@ -18,4 +19,7 @@ def main():
 		build_server()
 		build_sourcemap()
 
-main()
+# prevent from running twice
+if __name__ == '__main__':
+	multiprocessing.freeze_support()
+	main()		

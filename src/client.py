@@ -117,4 +117,4 @@ def build():
 		"end)"
 
 	]
-	write_script(build_path, "\n".join(content), packages_dir_zip_file_path=get_package_zip_path())
+	write_script(build_path, "\n".join(content), packages_dir_zip_file_path=get_package_zip_path(), skip_source_map=True)
