@@ -7,7 +7,7 @@ from luau.roblox.util import get_module_require
 from luau.path import get_if_module_script, remove_all_path_variants
 from src.config import get_data_config, HEADER_WARNING, GET_SUFFIX_KEY, UPDATE_SUFFIX_KEY
 
-def build():
+def build() -> None:
 	config = get_data_config()
 
 	build_path = config["build"]["out"]["client_path"]
@@ -118,3 +118,4 @@ def build():
 
 	]
 	write_script(build_path, "\n".join(content), packages_dir_zip_file_path=get_package_zip_path(), skip_source_map=True)
+	return None
