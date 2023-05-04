@@ -42,9 +42,9 @@ AcceptedType = Literal[
 
 def get_package_zip_path() -> str:
 	base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
-	print(base_path)
-	for sub_path in os.listdir(base_path):
-		print(sub_path)
+	# print(base_path)
+	# for sub_path in os.listdir(base_path):
+	# 	print(sub_path)
 
 	return os.path.join(base_path, "data\\Packages.zip")
 
