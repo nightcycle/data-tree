@@ -1,0 +1,6 @@
+datatree issues:
+- "int" doesn't get translated into a number in type file
+- serialize / deserialize dict still appears even when it's never called, consider adding a "_" to both it and the list variant
+- metadata doesn't remove type-tags
+- code 
+- need to update stylua executable for py-luau
