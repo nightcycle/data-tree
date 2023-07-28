@@ -51,10 +51,21 @@ def build():
 					if value in config["types"]:
 						dpath.new(out, path, mark_as_literal(f"serializers[\"{value}\"]({key_str})"))
 					else:
-						ro_type = get_roblox_type(get_raw_type_name(value))
-						if ro_type != None:
-							dpath.new(out, path, mark_as_literal(f"serializers[\"{ro_type}\"]({key_str})"))
-			
+						if "List[" in value:
+							true_type_name = value.replace("List[", "").replace("]", "")
+							if true_type_name[0] == " ":
+								true_type_name = true_type_name[1:]
+							dpath.new(out, path, mark_as_literal(f"serializeList(serializers[\"{true_type_name}\"])({key_str})"))
+						elif "Dict[" in value:
+							true_type_name = value.replace("Dict[", "").replace("]", "").split(",")[1]
+							if true_type_name[0] == " ":
+								true_type_name = true_type_name[1:]
+							dpath.new(out, path, mark_as_literal(f"serializeDict(serializers[\"{true_type_name}\"])({key_str})"))
+						else:
+							ro_type = get_roblox_type(get_raw_type_name(value))
+							if ro_type != None:
+								dpath.new(out, path, mark_as_literal(f"serializers[\"{ro_type}\"]({key_str})"))
+				
 			serializer_content += indent_block(("return HttpService:JSONEncode(" + from_dict(out, skip_initial_indent=True) + ") :: any").split("\n"))
 			serializer_content.append("end")
 
@@ -77,9 +88,20 @@ def build():
 					if value in config["types"]:
 						dpath.new(out, path, mark_as_literal(f"deserializers[\"{value}\"]({key_str})"))
 					else:
-						ro_type = get_roblox_type(get_raw_type_name(value))
-						if ro_type != None:
-							dpath.new(out, path, mark_as_literal(f"deserializers[\"{ro_type}\"]({key_str})"))
+						if "List[" in value:
+							true_type_name = value.replace("List[", "").replace("]", "")
+							if true_type_name[0] == " ":
+								true_type_name = true_type_name[1:]
+							dpath.new(out, path, mark_as_literal(f"deserializeList(deserializers[\"{true_type_name}\"])({key_str})"))
+						elif "Dict[" in value:
+							true_type_name = value.replace("Dict[", "").replace("]", "").split(",")[1]
+							if true_type_name[0] == " ":
+								true_type_name = true_type_name[1:]
+							dpath.new(out, path, mark_as_literal(f"deserializeDict(deserializers[\"{true_type_name}\"])({key_str})"))
+						else:
+							ro_type = get_roblox_type(get_raw_type_name(value))
+							if ro_type != None:
+								dpath.new(out, path, mark_as_literal(f"deserializers[\"{ro_type}\"]({key_str})"))
 			
 			deserializer_content += indent_block(("return " + from_dict(out, skip_initial_indent=True) + " :: any").split("\n"))
 			deserializer_content.append("end")
@@ -119,6 +141,7 @@ def build():
 			if "List[" in var_type:
 				var_type = (var_type.replace("List[", "")).replace("]", "")
 				var_type = "{[number]:" + var_type + "}"
+
 			if "Dict[" in var_type:
 				var_type = (var_type.replace("Dict[", "")).replace("]", "")
 				var_type = var_type.replace(",", "]:")
@@ -146,7 +169,10 @@ def build():
 					inner_type = final_type[5:(len(final_type)-1)]
 					raw_inner_type = get_raw_type_name(inner_type)
 					out_variables[typed_var_name] = initial_value
-					# print("LIST", full_path, ": ", inner_type)
+
+					if raw_inner_type[0] == " ":
+						raw_inner_type = raw_inner_type[1:]
+
 					dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", {var_name}, serializeList(serializers[\"{raw_inner_type}\"]), deserializeList(deserializers[\"{raw_inner_type}\"])) :: any"))
 					dpath.new(type_tree, path, mark_as_literal("DataHandler<{[number]: "+inner_type+"}, string>"))
 
@@ -160,6 +186,10 @@ def build():
 					val = type_list[1]
 					raw_val = get_raw_type_name(val)
 					out_variables[typed_var_name] = initial_value
+
+					if raw_val[0] == " ":
+						raw_val = raw_val[1:]
+
 					dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", {var_name}, serializeDict(serializers[\"{raw_val}\"]), deserializeDict(deserializers[\"{raw_val}\"])) :: any"))
 					dpath.new(type_tree, path, mark_as_literal("DataHandler<{["+key+"]: "+val+"}, string>"))
 			else:
