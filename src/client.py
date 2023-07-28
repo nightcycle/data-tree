@@ -20,8 +20,8 @@ def build() -> None:
 	for key in config["types"]:
 		type_imports.append(f"export type {key} = DataTypes.{key}")
 
-	type_tree = {}
-	func_tree = {}
+	type_tree: dict = {}
+	func_tree: dict = {}
 	for full_path, value in dpath.search(config["tree"], '**', yielded=True):
 		keys = full_path.split("/")
 		raw_keys = []

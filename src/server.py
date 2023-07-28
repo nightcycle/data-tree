@@ -765,7 +765,7 @@ def build():
 			"end",
 			"",
 			"self._Value = self:Get(true)",
-			"",
+			"if self._Value == nil then self._Value = initialValue end",
 			"return self",
 		]) + [
 		"end",
