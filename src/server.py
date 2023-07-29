@@ -320,7 +320,7 @@ def build():
 		"local NetworkUtil = " + get_package_require("NetworkUtil"),
 		"local Maid = " + get_package_require("Maid"),
 		"local Signal = " + get_package_require("Signal"),
-		"local Base64 = " + get_package_require("Base64"),
+		"-- local Base64 = " + get_package_require("Base64"),
 		"",
 		"--Modules",
 		"local DataTypes = " + get_module_require(config["build"]["shared_types_roblox_path"]),
@@ -708,7 +708,7 @@ def build():
 			] + indent_block([
 				] + indent_block([
 					"if type(data) == \"string\" then",
-					"\tself._EncodedValue = Base64.Encode(self._Serialize(data))",
+					"\tself._EncodedValue = self._Serialize(data) -- Base64.Encode(self._Serialize(data))",
 					"else",
 					"\tself._EncodedValue = self._Serialize(data)",
 					"end",
@@ -718,7 +718,15 @@ def build():
 			"\t\tself._EncodedValue = nil",
 			"\tend",
 			"\tif self._EncodedValue then",
-			"\t\tself._Value = self._Deserialize(self._EncodedValue)",
+			] + indent_block([
+				] + indent_block([
+					"if type(self._EncodedValue) == \"string\" then",
+					"\tself._Value = self._Deserialize(self._EncodedValue) -- self._Deserialize(Base64.Decode(self._EncodedValue))",
+					"else",
+					"\t\tself._Value = self._Deserialize(self._EncodedValue)",
+					"end",
+				]) + [
+			]) + [
 			"\telse",
 			"\t\tself._Value = nil",
 			"\tend",	
@@ -771,7 +779,7 @@ def build():
 			] + indent_block([
 				] + indent_block([
 					"if type(value) == \"string\" then",
-					"\tself._EncodedValue = Base64.Encode(self._Serialize(value))",
+					"\tself._EncodedValue = self._Serialize(value) -- Base64.Encode(self._Serialize(value))",
 					"else",
 					"\tself._EncodedValue = self._Serialize(value)",
 					"end",
@@ -785,7 +793,7 @@ def build():
 			] + indent_block([
 				] + indent_block([
 					"if type(self._EncodedValue) == \"string\" then",
-					"\tself._Value = self._Deserialize(Base64.Decode(self._EncodedValue))",
+					"\tself._Value = self._Deserialize(self._EncodedValue) -- self._Deserialize(Base64.Decode(self._EncodedValue))",
 					"else",
 					"\t\tself._Value = self._Deserialize(self._EncodedValue)",
 					"end",
@@ -839,7 +847,7 @@ def build():
 			] + indent_block([
 				] + indent_block([
 					"if type(self._EncodedValue) == \"string\" then",
-					"\tself._Value = self._Deserialize(Base64.Decode(self._EncodedValue))",
+					"\tself._Value = self._Deserialize(self._EncodedValue) -- self._Deserialize(Base64.Decode(self._EncodedValue))",
 					"else",
 					"\t\tself._Value = self._Deserialize(self._EncodedValue)",
 					"end",

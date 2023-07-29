@@ -11,7 +11,7 @@ local HttpService = game:GetService("HttpService")
 local NetworkUtil = require(script:WaitForChild("Packages"):WaitForChild("NetworkUtil"))
 local Maid = require(script:WaitForChild("Packages"):WaitForChild("Maid"))
 local Signal = require(script:WaitForChild("Packages"):WaitForChild("Signal"))
-local Base64 = require(script:WaitForChild("Packages"):WaitForChild("Base64"))
+-- local Base64 = require(script:WaitForChild("Packages"):WaitForChild("Base64"))
 
 --Modules
 local DataTypes = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("DataTreeTypes"))
@@ -430,7 +430,7 @@ function DataHandler:Set(data: any, force: boolean?)
 	end
 		if data then
 			if type(data) == "string" then
-				self._EncodedValue = Base64.Encode(self._Serialize(data))
+				self._EncodedValue = self._Serialize(data) -- Base64.Encode(self._Serialize(data))
 			else
 				self._EncodedValue = self._Serialize(data)
 			end
@@ -438,7 +438,11 @@ function DataHandler:Set(data: any, force: boolean?)
 			self._EncodedValue = nil
 		end
 		if self._EncodedValue then
-			self._Value = self._Deserialize(self._EncodedValue)
+			if type(self._EncodedValue) == "string" then
+				self._Value = self._Deserialize(self._EncodedValue) -- self._Deserialize(Base64.Decode(self._EncodedValue))
+			else
+					self._Value = self._Deserialize(self._EncodedValue)
+			end
 		else
 			self._Value = nil
 		end
@@ -480,7 +484,7 @@ function DataHandler:Update(transformer: (any) -> any, force: boolean?)
 		value = transformerWrapper(initialValue)
 		if value then
 			if type(value) == "string" then
-				self._EncodedValue = Base64.Encode(self._Serialize(value))
+				self._EncodedValue = self._Serialize(value) -- Base64.Encode(self._Serialize(value))
 			else
 				self._EncodedValue = self._Serialize(value)
 			end
@@ -490,7 +494,7 @@ function DataHandler:Update(transformer: (any) -> any, force: boolean?)
 	end
 		if self._EncodedValue then
 			if type(self._EncodedValue) == "string" then
-				self._Value = self._Deserialize(Base64.Decode(self._EncodedValue))
+				self._Value = self._Deserialize(self._EncodedValue) -- self._Deserialize(Base64.Decode(self._EncodedValue))
 			else
 					self._Value = self._Deserialize(self._EncodedValue)
 			end
@@ -533,7 +537,7 @@ function DataHandler:Get(force: boolean?): (any?, boolean)
 		self._EncodedValue = data
 		if self._EncodedValue then
 			if type(self._EncodedValue) == "string" then
-				self._Value = self._Deserialize(Base64.Decode(self._EncodedValue))
+				self._Value = self._Deserialize(self._EncodedValue) -- self._Deserialize(Base64.Decode(self._EncodedValue))
 			else
 					self._Value = self._Deserialize(self._EncodedValue)
 			end
