@@ -3,7 +3,7 @@
 
 --Services
 local Players = game:GetService("Players")
-local DataStoreService = game:GetService("DataStoreService")
+local DataStoreService = require(script:WaitForChild("Packages"):WaitForChild("MockDataStoreService"))
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 
@@ -85,8 +85,8 @@ local BASE_DOMAIN = "gamework"
 local GET_SUFFIX = "DATA_TREE_CLT_GET"
 local UPDATE_SUFFIX = "DATA_TREE_CLT_UPDATE"
 local PAGE_LENGTH = 100
-local RETRY_LIMIT = if RunService:IsStudio() then 1 else 10
-local RETRY_DELAY = if RunService:IsStudio() then 0 else 0.5
+local RETRY_LIMIT = 10
+local RETRY_DELAY = 0.5
 local METADATA = {
 	["saved_at::DateTime"] = "NOW",
 	["major"] = 1,
@@ -564,9 +564,7 @@ function DataHandler.new(player: Player, scope: string, initialValue: any, _seri
 		_Serialize = if _serializer then _serializer else function(v: any) return v end,
 		_Deserialize = if _deserializer then _deserializer else function(v: any) return v end,
 		OnChanged = onChanged,
-		DataStore = if not RunService:IsStudio()
-			then DataStoreService:GetDataStore(BASE_DOMAIN, scope, dataStoreOptions)
-			else nil :: any,
+		DataStore =  DataStoreService:GetDataStore(BASE_DOMAIN, scope, dataStoreOptions),
 		_Value = initialValue,
 		Key = tostring(player.UserId),
 		SetOptions = setOptions,
@@ -699,9 +697,7 @@ end
 function NumberDataHandler.new(player: Player, scope: string, initialValue: number, _processor: Processor<number>?): NumberDataHandler
 	local self: NumberDataHandler = setmetatable(DataHandler.new(player, scope, initialValue, _processor :: any, _processor :: any), NumberDataHandler) :: any
 	
-	self.DataStore = if not RunService:IsStudio()
-		then DataStoreService:GetOrderedDataStore(BASE_DOMAIN, scope)
-		else nil :: any
+	self.DataStore = DataStoreService:GetOrderedDataStore(BASE_DOMAIN, scope)
 	
 	local incrementOptions = Instance.new("DataStoreIncrementOptions")
 	self._Maid:GiveTask(incrementOptions)
