@@ -620,6 +620,8 @@ def build():
 		"local _deserializeCFrame = function(value: string): CFrame",
 		] + indent_block([		
 			"local data = HttpService:JSONDecode(value)",
+			"data.Orientation = HttpService:JSONDecode(data.Orientation)",
+			"data.Position = HttpService:JSONDecode(data.Position)",
 			"local position = _deserializeVector3(data[\"Position\"])",
 			"return CFrame.fromEulerAnglesYXZ(",
 			"\tmath.rad(data.Orientation.X),",
@@ -631,6 +633,8 @@ def build():
 		"local _deserializeCFrameInteger = function(value: string): CFrame",
 		] + indent_block([		
 			"local data = HttpService:JSONDecode(value)",
+			"data.Orientation = HttpService:JSONDecode(data.Orientation)",
+			"data.Position = HttpService:JSONDecode(data.Position)",
 			"local position = _deserializeVector3Integer(data[\"Position\"])",
 			"return CFrame.fromEulerAnglesYXZ(",
 			"\tmath.rad(math.round(data.Orientation.X)),",
@@ -642,6 +646,8 @@ def build():
 		"local _deserializeCFrameDouble = function(value: string): CFrame",
 		] + indent_block([		
 			"local data = HttpService:JSONDecode(value)",
+			"data.Orientation = HttpService:JSONDecode(data.Orientation)",
+			"data.Position = HttpService:JSONDecode(data.Position)",
 			"local position = _deserializeVector3Double(data[\"Position\"])",
 			"return CFrame.fromEulerAnglesYXZ(",
 			"\tmath.rad(math.round(data.Orientation.X*100)/100),",
