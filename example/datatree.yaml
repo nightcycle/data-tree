@@ -1,3 +1,4 @@
+domain_name: gamedata
 build:
   shared_types_roblox_path: game/ReplicatedStorage/Shared/DataTreeTypes
   out:

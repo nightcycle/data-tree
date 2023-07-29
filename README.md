@@ -311,6 +311,12 @@ metadata:
   
 ```
 
+#### setting the datastore name
+You can set the datastore name by changing "domain_name"
+```yaml
+domain_name: final_data_3
+```
+
 ### build
 Once you've finished configuring the datatree.yaml file, you can create the actual scripts using this command:
 ```sh

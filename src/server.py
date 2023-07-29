@@ -25,7 +25,7 @@ def get_function_name(text: str) -> str:
 
 def build():
 	config = get_data_config()
-
+	domain_name = config["domain_name"]
 	build_path = config["build"]["out"]["server_path"]
 	assert get_if_module_script(build_path), "server datatree must be a ModuleScript, please make sure the server_path only ends with .lua/luau"
 
@@ -379,7 +379,7 @@ def build():
 		"export type DataTree = " + from_dict_to_type(type_tree, skip_initial_indent=True),
 		"",
 		"--Constants",
-		"local BASE_DOMAIN = \"gamework\"",
+		f"local BASE_DOMAIN = \"{domain_name}\"",
 		f"local GET_SUFFIX = \"{GET_SUFFIX_KEY}\"",
 		f"local UPDATE_SUFFIX = \"{UPDATE_SUFFIX_KEY}\"",
 		"local PAGE_LENGTH = 100",

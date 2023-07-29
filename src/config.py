@@ -4,6 +4,7 @@ from typing import Any, TypedDict, Literal
 
 CONFIG_PATH = "datatree.yaml"
 DEFAULT_TABLE = {
+	"domain_name": "gamedata",
 	"build": {
 		"shared_types_roblox_path": "game/ReplicatedStorage/Shared/DataTreeTypes",
 		"out": {
@@ -39,6 +40,7 @@ class BuildConfig(TypedDict):
   out: OutConfig
 
 class DataConfig(TypedDict):
+	domain_name: str
 	build: BuildConfig
 	metadata: dict
 	types: dict
