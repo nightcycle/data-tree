@@ -56,7 +56,7 @@ def build():
 
 		if type(type_data) == dict:
 			_serializer_content = [
-				f"local _serialize{get_function_name(type_name)} = function(value: {type_name}): string",
+				f"local _serialize{get_function_name(type_name)} = function(value: {type_name}): Table",
 			]
 			out: dict = {}
 			for path, value in dpath.search(type_data, '**', yielded=True):
@@ -97,7 +97,7 @@ def build():
 								else:
 									dpath.new(out, path, mark_as_literal(f"_serialize{get_function_name(value)}({key_str})"))
 				
-			_serializer_content += indent_block(("return HttpService:JSONEncode(" + from_dict(out, skip_initial_indent=True) + ") :: any").split("\n"))
+			_serializer_content += indent_block(("return " + from_dict(out, skip_initial_indent=True) + "").split("\n"))
 			_serializer_content.append("end")
 
 			return _serializer_content
@@ -117,8 +117,7 @@ def build():
 	def assemble_deserializer_function(type_name: str, type_data: dict | list) -> list[str]:
 		if type(type_data) == dict:
 			_deserializer_content = [
-				f"local _deserialize{get_function_name(type_name)} = function(value: string): {type_name}",
-				"\tlocal data = HttpService:JSONDecode(value)",
+				f"local _deserialize{get_function_name(type_name)} = function(data: Table): {type_name}",
 			]
 			out: dict = {}
 			for path, value in dpath.search(type_data, '**', yielded=True):
@@ -320,12 +319,13 @@ def build():
 		"local NetworkUtil = " + get_package_require("NetworkUtil"),
 		"local Maid = " + get_package_require("Maid"),
 		"local Signal = " + get_package_require("Signal"),
-		"-- local Base64 = " + get_package_require("Base64"),
+		"local Base64 = " + get_package_require("Base64"),
 		"",
 		"--Modules",
 		"local DataTypes = " + get_module_require(config["build"]["shared_types_roblox_path"]),
 		"",
 		"--Types",
+		"type Table = {[any]: any}",
 		"type Signal = Signal.Signal",
 		"type Maid = Maid.Maid",
 		] + type_imports + [
@@ -388,18 +388,17 @@ def build():
 		"local METADATA = " + from_dict(config["metadata"]),
 		"",
 		"-- Private functions",
-		"function _serializeList(unitMethod: (((val: any) -> string) | ((val: number) -> number) | ((val: boolean) -> boolean))): (val: { [number]: any }) -> string",
-		"	return function(listVal: { [number]: any })",
+		"function _serializeList(unitMethod: (((val: any) -> Table) | ((val: any) -> string) | ((val: number) -> number) | ((val: boolean) -> boolean))): (val: { [number]: any }) -> Table",
+		"	return function(listVal: { [number]: any }): Table",
 		"		local out = {}",
 		"		for i, v in ipairs(listVal) do",
 		"			out[i] = (unitMethod :: any)(v)",
 		"		end",
-		"		return HttpService:JSONEncode(out)",
+		"		return out",
 		"	end",
 		"end",
-		"function _deserializeList(unitMethod: (((val: string) -> any) | ((val: number) -> number) | ((val: boolean) -> boolean))): (val: string) -> { [number]: any }",
-		"	return function(listVal: string)",
-		"		local input = HttpService:JSONDecode(listVal)",
+		"function _deserializeList(unitMethod: (((val: string) -> any) | ((val: Table) -> any) | ((val: number) -> number) | ((val: boolean) -> boolean))): (input: {[number]: any}) -> { [number]: any }",
+		"	return function(input: Table)",
 		"		local out = {}",
 		"		for i, v in ipairs(input) do",
 		"			out[i] = (unitMethod :: any)(v)",
@@ -407,18 +406,17 @@ def build():
 		"		return out",
 		"	end",
 		"end",
-		"function _serializeDict(unitMethod: (((val: any) -> string) | ((val: number) -> number) | ((val: boolean) -> boolean))): (val: { [any]: any }) -> string",
-		"	return function(dictVal: { [any]: any }): string",
+		"function _serializeDict(unitMethod: (((val: any) -> Table) | ((val: any) -> string) | ((val: number) -> number) | ((val: boolean) -> boolean))): (val: { [any]: any }) -> Table",
+		"	return function(dictVal: { [any]: any }): Table",
 		"		local out = {}",
 		"		for k, v in pairs(dictVal) do",
 		"			out[k] = (unitMethod :: any)(v)",
 		"		end",
-		"		return HttpService:JSONEncode(out)",
+		"		return out",
 		"	end",
 		"end",
-		"function _deserializeDict(unitMethod: (((val: string) -> any) | ((val: number) -> number) | ((val: boolean) -> boolean))): (val: string) -> { [any]: any }",
-		"	return function(dictVal: string): { [any]: any }",
-		"		local input = HttpService:JSONDecode(dictVal)",
+		"function _deserializeDict(unitMethod: (((val: string) -> any) | ((val: Table) -> any) | ((val: number) -> number) | ((val: boolean) -> boolean))): (val: Table) -> { [any]: any }",
+		"	return function(input: Table): { [any]: any }",
 		"		local out = {}",
 		"		for k, v in pairs(input) do",
 		"			out[k] = (unitMethod :: any)(v)",
@@ -446,9 +444,13 @@ def build():
 		"local _serializeNumber = function(value: number): number",
 		"\treturn value",
 		"end",
-		"local _serializeInteger = _serializeNumber",
+		"local _serializeInteger = function(value: number): number",
+		"\treturn _processInteger(value)",
+		"end",
 		"local _serializeInt = _serializeInteger",
-		"local _serializeDouble = _serializeNumber",
+		"local _serializeDouble = function(value: number): number",
+		"\treturn _processDouble(value)",
+		"end",
 		"local _serializeFloat = _serializeNumber",
 		"local _serializeString = function(value: string): string",
 		"\treturn value",
@@ -459,100 +461,100 @@ def build():
 		"local _serializeDateTime = function(value: DateTime): string",
 		"\treturn value:ToIsoDate()",
 		"end",
-		"local _serializeVector3 = function(value: Vector3): string",
+		"local _serializeVector3 = function(value: Vector3): Table",
 		] + indent_block([		
-			"return HttpService:JSONEncode({",
+			"return {",
 			] + indent_block([	
 				"X = value.X,",
 				"Y = value.Y,",
 				"Z = value.Z",
 			]) + [
-			"})",
+			"}",
 		]) + [	
 		"end",
-		"local _serializeVector3Integer = function(value: Vector3): string",
+		"local _serializeVector3Integer = function(value: Vector3): Table",
 		] + indent_block([		
-			"return HttpService:JSONEncode({",
+			"return {",
 			] + indent_block([	
 				"X = math.round(value.X),",
 				"Y = math.round(value.Y),",
 				"Z = math.round(value.Z)",
 			]) + [
-			"})",
+			"}",
 		]) + [	
 		"end",
-		"local _serializeVector3Double = function(value: Vector3): string",
+		"local _serializeVector3Double = function(value: Vector3): Table",
 		] + indent_block([		
-			"return HttpService:JSONEncode({",
+			"return {",
 			] + indent_block([	
 				"X = math.round(value.X*100)/100,",
 				"Y = math.round(value.Y*100)/100,",
 				"Z = math.round(value.Z*100)/100",
 			]) + [
-			"})",
+			"}",
 		]) + [	
 		"end",
-		"local _serializeVector2 = function(value: Vector2): string",
+		"local _serializeVector2 = function(value: Vector2): Table",
 		] + indent_block([		
-			"return HttpService:JSONEncode({",
+			"return {",
 			] + indent_block([	
 				"X = value.X,",
 				"Y = value.Y",
 			]) + [
-			"})",
+			"}",
 		]) + [	
 		"end",
-		"local _serializeVector2Integer = function(value: Vector2): string",
+		"local _serializeVector2Integer = function(value: Vector2): Table",
 		] + indent_block([		
-			"return HttpService:JSONEncode({",
+			"return {",
 			] + indent_block([	
 				"X = math.round(value.X),",
 				"Y = math.round(value.Y)",
 			]) + [
-			"})",
+			"}",
 		]) + [	
 		"end",
-		"local _serializeVector2Double = function(value: Vector2): string",
+		"local _serializeVector2Double = function(value: Vector2): Table",
 		] + indent_block([		
-			"return HttpService:JSONEncode({",
+			"return {",
 			] + indent_block([	
 				"X = math.round(value.X*100)/100,",
 				"Y = math.round(value.Y*100)/100",
 			]) + [
-			"})",
+			"}",
 		]) + [	
 		"end",
-		"local _serializeCFrame = function(value: CFrame): string",
+		"local _serializeCFrame = function(value: CFrame): Table",
 		] + indent_block([		
 			"local x,y,z = value:ToEulerAnglesYXZ()",
-			"return HttpService:JSONEncode({",
+			"return {",
 			] + indent_block([
 				"Position = _serializeVector3(value.Position),",
 				"Orientation = _serializeVector3(Vector3.new(math.deg(x), math.deg(y), math.deg(z))),",
 			]) + [
-			"})",
+			"}",
 		]) + [	
 		"end",
-		"local _serializeCFrameDouble = function(value: CFrame): string",
+		"local _serializeCFrameDouble = function(value: CFrame): Table",
 		] + indent_block([		
 			"local x,y,z = value:ToEulerAnglesYXZ()",
-			"return HttpService:JSONEncode({",
+			"return {",
 			] + indent_block([
 				"Position = _serializeVector3Double(value.Position),",
 				"Orientation = _serializeVector3Double(Vector3.new(math.deg(x), math.deg(y), math.deg(z))),",
 			]) + [
-			"})",
+			"}",
 		]) + [	
 		"end",
-		"local _serializeCFrameInteger = function(value: CFrame): string",
+		"local _serializeCFrameInteger = function(value: CFrame): Table",
 		] + indent_block([		
 			"local x,y,z = value:ToEulerAnglesYXZ()",
-			"return HttpService:JSONEncode({",
+			"return {",
 			] + indent_block([
 				"Position = _serializeVector3Integer(value.Position),",
 				"Orientation = _serializeVector3Integer(Vector3.new(math.deg(x), math.deg(y), math.deg(z))),",
 			]) + [
-			"})",
+			"}",
 		]) + [	
 		"end",
 		"local _serializeEnum = function(value: EnumItem): string",
@@ -581,78 +583,66 @@ def build():
 		"local _deserializeDateTime = function(value: string): DateTime",
 		"\treturn DateTime.fromIsoDate(value)",
 		"end",	
-		"local _deserializeVector3 = function(value: string): Vector3",
+		"local _deserializeVector3 = function(value: Table): Vector3",
 		] + indent_block([		
-			"local data = HttpService:JSONDecode(value)",
-			"return Vector3.new(data.X, data.Y, data.Z)",
+			"return Vector3.new(value.X, value.Y, value.Z)",
 		]) + [	
 		"end",
-		"local _deserializeVector3Integer = function(value: string): Vector3",
+		"local _deserializeVector3Integer = function(value: Table): Vector3",
 		] + indent_block([		
-			"local data = HttpService:JSONDecode(value)",
-			"return Vector3.new(math.round(data.X), math.round(data.Y), math.round(data.Z))",
+			"return Vector3.new(math.round(value.X), math.round(value.Y), math.round(value.Z))",
 		]) + [	
 		"end",
-		"local _deserializeVector3Double = function(value: string): Vector3",
+		"local _deserializeVector3Double = function(value: Table): Vector3",
 		] + indent_block([		
-			"local data = HttpService:JSONDecode(value)",
-			"return Vector3.new(math.round(data.X*100)/100, math.round(data.Y*100)/100, math.round(data.Z*100)/100)",
+			"return Vector3.new(math.round(value.X*100)/100, math.round(value.Y*100)/100, math.round(value.Z*100)/100)",
 		]) + [	
 		"end",
-		"local _deserializeVector2 = function(value: string): Vector2",
+		"local _deserializeVector2 = function(value: Table): Vector2",
 		] + indent_block([		
-			"local data = HttpService:JSONDecode(value)",
-			"return Vector2.new(data.X, data.Y)",
+			"return Vector2.new(value.X, value.Y)",
 		]) + [	
 		"end",
-		"local _deserializeVector2Integer = function(value: string): Vector2",
+		"local _deserializeVector2Integer = function(value: Table): Vector2",
 		] + indent_block([		
-			"local data = HttpService:JSONDecode(value)",
-			"return Vector2.new(math.round(data.X), math.round(data.Y))",
+			"return Vector2.new(math.round(value.X), math.round(value.Y))",
 		]) + [	
 		"end",
-		"local _deserializeVector2Double = function(value: string): Vector2",
+		"local _deserializeVector2Double = function(value: Table): Vector2",
 		] + indent_block([		
-			"local data = HttpService:JSONDecode(value)",
-			"return Vector2.new(math.round(data.X*100)/100, math.round(data.Y*100)/100)",
+			"return Vector2.new(math.round(value.X*100)/100, math.round(value.Y*100)/100)",
 		]) + [	
 		"end",
-		"local _deserializeCFrame = function(value: string): CFrame",
+		"local _deserializeCFrame = function(value: Table): CFrame",
 		] + indent_block([		
-			"local data = HttpService:JSONDecode(value)",
-			"data.Orientation = HttpService:JSONDecode(data.Orientation)",
-			"data.Position = HttpService:JSONDecode(data.Position)",
-			"local position = _deserializeVector3(data[\"Position\"])",
+			"local position = _deserializeVector3(value[\"Position\"])",
+			"local orientation = _deserializeVector3(value[\"Orientation\"])",
 			"return CFrame.fromEulerAnglesYXZ(",
-			"\tmath.rad(data.Orientation.X),",
-			"\tmath.rad(data.Orientation.Y),",
-			"\tmath.rad(data.Orientation.Z)",
+			"\tmath.rad(orientation.X),",
+			"\tmath.rad(orientation.Y),",
+			"\tmath.rad(orientation.Z)",
 			") + position"
 		]) + [	
 		"end",
-		"local _deserializeCFrameInteger = function(value: string): CFrame",
+		"local _deserializeCFrameInteger = function(value: Table): CFrame",
 		] + indent_block([		
-			"local data = HttpService:JSONDecode(value)",
-			"data.Orientation = HttpService:JSONDecode(data.Orientation)",
-			"data.Position = HttpService:JSONDecode(data.Position)",
-			"local position = _deserializeVector3Integer(data[\"Position\"])",
+			"local position = _deserializeVector3Integer(value[\"Position\"])",
+			"local orientation = _deserializeVector3Integer(value[\"Orientation\"])",
 			"return CFrame.fromEulerAnglesYXZ(",
-			"\tmath.rad(math.round(data.Orientation.X)),",
-			"\tmath.rad(math.round(data.Orientation.Y)),",
-			"\tmath.rad(math.round(data.Orientation.Z))",
+			"\tmath.rad(orientation.X),",
+			"\tmath.rad(orientation.Y),",
+			"\tmath.rad(orientation.Z)",
 			") + position"
 		]) + [	
 		"end",
-		"local _deserializeCFrameDouble = function(value: string): CFrame",
+		"local _deserializeCFrameDouble = function(value: Table): CFrame",
 		] + indent_block([		
-			"local data = HttpService:JSONDecode(value)",
-			"data.Orientation = HttpService:JSONDecode(data.Orientation)",
-			"data.Position = HttpService:JSONDecode(data.Position)",
-			"local position = _deserializeVector3Double(data[\"Position\"])",
+			"local position = _deserializeVector3Double(value[\"Position\"])",
+			"local orientation = _deserializeVector3Double(value[\"Orientation\"])",
 			"return CFrame.fromEulerAnglesYXZ(",
-			"\tmath.rad(math.round(data.Orientation.X*100)/100),",
-			"\tmath.rad(math.round(data.Orientation.Y*100)/100),",
-			"\tmath.rad(math.round(data.Orientation.Z*100)/100)",
+			"\tmath.rad(orientation.X),",
+			"\tmath.rad(orientation.Y),",
+			"\tmath.rad(orientation.Z)",
 			") + position"
 		]) + [	
 		"end",
@@ -868,7 +858,7 @@ def build():
 		]) + [
 		"end",
 		"",	
-		"function DataHandler.new(player: Player, scope: string, initialValue: any, _serializer: Serializer<any, string>?, _deserializer: Deserializer<string, any>?)",
+		"function DataHandler.new(player: Player, scope: string, initialValue: any, _serializer: Serializer<any, any>?, _deserializer: Deserializer<any, any>?)",
 		] + indent_block([		
 			"local maid = Maid.new()",
 			"",
@@ -886,8 +876,22 @@ def build():
 			] + indent_block([		
 				"_Maid = maid,",
 				"_IsAlive = true,",
-				"_Serialize = if _serializer then _serializer else function(v: any) return v end,",
-				"_Deserialize = if _deserializer then _deserializer else function(v: any) return v end,",
+				"_Serialize = if _serializer then",
+				"\tfunction(v: any)",
+				"\t\treturn if type(v) == \"table\" then Base64.Encode(HttpService:JSONEncode(_serializer(v))) else v",
+				"\tend",
+				"else function(v: any) return v end,",
+				"_Deserialize = if _deserializer then ",
+				"\tfunction(v: any)",
+				"\t\tlocal out: any",
+				"\t\tlocal success, _msg = pcall(function()",
+				"\t\t\tout = _deserializer(HttpService:JSONDecode(Base64.Decode(v)))",
+				"\t\tend)",
+				"\t\treturn if success then out else v"
+				"\tend",
+				"else function(v: any) return v end,",
+				# "_Serialize = if _serializer then _serializer else function(v: any) return v end,",
+				# "_Deserialize = if _deserializer then _deserializer else function(v: any) return v end,",
 				"OnChanged = onChanged,",
 				"DataStore =  DataStoreService:GetDataStore(BASE_DOMAIN, scope, dataStoreOptions),",
 				"_Value = initialValue,",
