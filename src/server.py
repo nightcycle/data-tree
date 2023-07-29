@@ -1,7 +1,7 @@
 import dpath
 from src.util import get_package_zip_path, get_if_optional, write_value_from_config, write_standard_value_from_config, get_raw_key_name, get_type_name_from_key, get_roblox_type, get_raw_type_name
 from luau import indent_block
-from luau.convert import from_dict, mark_as_literal, from_dict_to_type
+from luau.convert import from_dict, mark_as_literal, from_dict_to_type, from_list
 from luau.roblox import write_script, get_package_require
 from luau.roblox.util import get_module_require
 from luau.path import get_if_module_script, remove_all_path_variants
@@ -18,6 +18,11 @@ def get_if_number_in_path(path: str) -> bool:
 			key = key + ""
 	return has_num_in_path
 
+def get_function_name(text: str) -> str:
+	first_char = text[0].upper()
+	return (first_char + text[1:]).replace("Enum.", "Enum")
+
+
 def build():
 	config = get_data_config()
 
@@ -30,6 +35,17 @@ def build():
 	for key in config["types"]:
 		type_imports.append(f"export type {key} = DataTypes.{key}")
 
+
+	enum_str_list = []
+	for path, value in dpath.search(config["types"], '**', yielded=True):
+		if "Enum." in value:
+			enum_str_list.append(value)
+
+	# State::Enum.HumanoidStateType
+	for path, value in dpath.search(config["tree"], '**', yielded=True):
+		if ("Enum." in path) and ("::" in path):
+			enum_str_list.append(path.split("::")[1])
+
 	type_tree = {}
 	func_tree = {}
 	enum_deserializers = []
@@ -37,45 +53,71 @@ def build():
 	type_deserializers = []
 
 	def assemble_serializer_function(type_name: str, type_data: dict | list) -> list[str]:
+
 		if type(type_data) == dict:
-			serializer_content = [
-				f"serializers[\"{type_name}\"] = function(value: {type_name}): string",
+			_serializer_content = [
+				f"local _serialize{get_function_name(type_name)} = function(value: {type_name}): string",
 			]
 			out: dict = {}
 			for path, value in dpath.search(type_data, '**', yielded=True):
 				if type(value) == str:
 					keys = path.split("/")
 					key_str = "value"
+					is_optional = "?" == value[len(value)-1]
 					for key in keys:
 						key_str += "[\""+key+"\"]"
 					if value in config["types"]:
-						dpath.new(out, path, mark_as_literal(f"serializers[\"{value}\"]({key_str})"))
+						if is_optional:
+							dpath.new(out, path, mark_as_literal(f"if {key_str} ~= nil then _serialize{get_function_name(value)}({key_str}) else nil"))
+						else:
+							dpath.new(out, path, mark_as_literal(f"_serialize{get_function_name(value)}({key_str})"))
 					else:
 						if "List[" in value:
 							true_type_name = value.replace("List[", "").replace("]", "")
 							if true_type_name[0] == " ":
 								true_type_name = true_type_name[1:]
-							dpath.new(out, path, mark_as_literal(f"serializeList(serializers[\"{true_type_name}\"])({key_str})"))
+							if is_optional:
+								dpath.new(out, path, mark_as_literal(f"if {key_str} ~= nil then _serializeList(_serialize{get_function_name(true_type_name)})({key_str}) else nil"))
+							else:
+								dpath.new(out, path, mark_as_literal(f"_serializeList(_serialize{get_function_name(true_type_name)})({key_str})"))
 						elif "Dict[" in value:
 							true_type_name = value.replace("Dict[", "").replace("]", "").split(",")[1]
 							if true_type_name[0] == " ":
 								true_type_name = true_type_name[1:]
-							dpath.new(out, path, mark_as_literal(f"serializeDict(serializers[\"{true_type_name}\"])({key_str})"))
+							if is_optional:
+								dpath.new(out, path, mark_as_literal(f"if {key_str} ~= nil then _serializeDict(_serialize{get_function_name(true_type_name)})({key_str}) else nil"))
+							else:
+								dpath.new(out, path, mark_as_literal(f"_serializeDict(_serialize{get_function_name(true_type_name)})({key_str})"))
 						else:
 							ro_type = get_roblox_type(get_raw_type_name(value))
 							if ro_type != None:
-								dpath.new(out, path, mark_as_literal(f"serializers[\"{ro_type}\"]({key_str})"))
+								assert ro_type
+								if is_optional:
+									dpath.new(out, path, mark_as_literal(f"if {key_str} ~= nil then _serialize{get_function_name(ro_type)}({key_str}) else nil"))
+								else:
+									dpath.new(out, path, mark_as_literal(f"_serialize{get_function_name(value)}({key_str})"))
 				
-			serializer_content += indent_block(("return HttpService:JSONEncode(" + from_dict(out, skip_initial_indent=True) + ") :: any").split("\n"))
-			serializer_content.append("end")
+			_serializer_content += indent_block(("return HttpService:JSONEncode(" + from_dict(out, skip_initial_indent=True) + ") :: any").split("\n"))
+			_serializer_content.append("end")
 
-			return serializer_content
+			return _serializer_content
+		elif type(type_data) == list:
+			_serializer_content = [
+				f"local _serialize{get_function_name(type_name)} = function(value: {type_name}): string",
+				f"\tlocal index = table.find({from_list(type_data, indent_count=0, multi_line=False, skip_initial_indent=True)}, value)",
+				"\tassert(index)",
+				"\treturn tostring(index)",
+				"end",
+			]
+
+			return _serializer_content
+
 		return []
 
 	def assemble_deserializer_function(type_name: str, type_data: dict | list) -> list[str]:
 		if type(type_data) == dict:
-			deserializer_content = [
-				f"deserializers[\"{type_name}\"] = function(value: string): {type_name}",
+			_deserializer_content = [
+				f"local _deserialize{get_function_name(type_name)} = function(value: string): {type_name}",
 				"\tlocal data = HttpService:JSONDecode(value)",
 			]
 			out: dict = {}
@@ -83,31 +125,61 @@ def build():
 				if type(value) == str:
 					keys = path.split("/")
 					key_str = "data"
+					is_optional = "?" == value[len(value)-1]
 					for key in keys:
 						key_str += "[\""+key+"\"]"
 					if value in config["types"]:
-						dpath.new(out, path, mark_as_literal(f"deserializers[\"{value}\"]({key_str})"))
+						if is_optional:
+							dpath.new(out, path, mark_as_literal(f"if {key_str} ~= nil then _deserialize{get_function_name(value)}({key_str}) else nil"))
+						else:
+							dpath.new(out, path, mark_as_literal(f"_deserialize{get_function_name(value)}({key_str})"))
 					else:
 						if "List[" in value:
 							true_type_name = value.replace("List[", "").replace("]", "")
 							if true_type_name[0] == " ":
 								true_type_name = true_type_name[1:]
-							dpath.new(out, path, mark_as_literal(f"deserializeList(deserializers[\"{true_type_name}\"])({key_str})"))
+							if is_optional:	
+								dpath.new(out, path, mark_as_literal(f"if {key_str} ~= nil then _deserializeList(_deserialize{get_function_name(true_type_name)})({key_str}) else nil"))
+							else:
+								dpath.new(out, path, mark_as_literal(f"_deserializeList(_deserialize{get_function_name(true_type_name)})({key_str})"))
 						elif "Dict[" in value:
 							true_type_name = value.replace("Dict[", "").replace("]", "").split(",")[1]
 							if true_type_name[0] == " ":
 								true_type_name = true_type_name[1:]
-							dpath.new(out, path, mark_as_literal(f"deserializeDict(deserializers[\"{true_type_name}\"])({key_str})"))
+							if is_optional:	
+								dpath.new(out, path, mark_as_literal(f"if {key_str} ~= nil then _deserializeDict(_deserialize{get_function_name(true_type_name)})({key_str}) else nil"))
+							else:
+								dpath.new(out, path, mark_as_literal(f"_deserializeDict(_deserialize{get_function_name(true_type_name)})({key_str})"))
 						else:
 							ro_type = get_roblox_type(get_raw_type_name(value))
 							if ro_type != None:
-								dpath.new(out, path, mark_as_literal(f"deserializers[\"{ro_type}\"]({key_str})"))
-			
-			deserializer_content += indent_block(("return " + from_dict(out, skip_initial_indent=True) + " :: any").split("\n"))
-			deserializer_content.append("end")
+								assert ro_type
+								if is_optional:
+									dpath.new(out, path, mark_as_literal(f"if {key_str} ~= nil then _deserialize{get_function_name(ro_type)}({key_str}) else nil"))
+								else:
+									dpath.new(out, path, mark_as_literal(f"_deserialize{get_function_name(ro_type)}({key_str})"))
 
-			return deserializer_content
+			_deserializer_content += indent_block(("return " + from_dict(out, skip_initial_indent=True) + " :: any").split("\n"))
+			_deserializer_content.append("end")
+
+			return _deserializer_content
+		elif type(type_data) == list:
+			_deserializer_content = [
+				f"local _deserialize{get_function_name(type_name)} = function(value: number): {type_name}",
+				f"\tlocal options = {from_list(type_data, indent_count=0, multi_line=False, skip_initial_indent=True)}",
+				f"\tlocal index = tonumber(value)",
+				f"\tassert(index)",
+				f"\treturn options[index] :: {type_name}",
+				"end",
+			]
+
+			return _deserializer_content
 		return []
+
+	for enum_type in enum_str_list:
+		type_serializers += [
+			f"local _serialize{get_function_name(enum_type)} = _serializeEnum :: (value: {enum_type}) -> string",
+		]
 
 	for type_name, type_data in config["types"].items():
 		type_deserializers += assemble_deserializer_function(type_name, type_data)
@@ -115,10 +187,11 @@ def build():
 
 	def write_enum_deserializer(enum_name: str):
 		raw_enum_name = get_raw_type_name(enum_name)
+		enum_func_name = get_function_name("Enum."+raw_enum_name)
 		return [
-			f"deserializers[\"Enum.{raw_enum_name}\"] = function(value: number): Enum.{raw_enum_name}",
-			f"\tfor i, enumItem in ipairs(Enum.{raw_enum_name}:GetEnumItems()) do if enumItem.Value == value then return enumItem end end",
-			f"error(\"No enum item found in {raw_enum_name} for value \"..tostring(value))",
+			f"local _deserialize{enum_func_name} = function(value: string): Enum.{raw_enum_name}",
+			f"\tfor i, enumItem in ipairs(Enum.{raw_enum_name}:GetEnumItems()) do if enumItem.Value == tonumber(value) then return enumItem end end",
+			f"\terror(\"No enum item found in {raw_enum_name} for value \"..value)",
 			"end",
 		]
 
@@ -158,9 +231,9 @@ def build():
 				
 				out_variables[typed_var_name] = initial_value
 				if value == "nil":
-					dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", {var_name}, serializers[\"{final_type}\"], deserializers[\"{final_type}\"])"))
+					dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", {var_name}, _serialize{get_function_name(final_type)}, _deserialize{get_function_name(final_type)})"))
 				else:
-					dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", {var_name}, serializers[\"{final_type}\"], deserializers[\"{final_type}\"])"))
+					dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", {var_name}, _serialize{get_function_name(final_type)}, _deserialize{get_function_name(final_type)})"))
 
 				dpath.new(type_tree, path, mark_as_literal(f"DataHandler<{final_type}, string>"))
 			elif final_type[0:5] == "List[":
@@ -173,7 +246,7 @@ def build():
 					if raw_inner_type[0] == " ":
 						raw_inner_type = raw_inner_type[1:]
 
-					dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", {var_name}, serializeList(serializers[\"{raw_inner_type}\"]), deserializeList(deserializers[\"{raw_inner_type}\"])) :: any"))
+					dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", {var_name}, _serializeList(_serialize{get_function_name(raw_inner_type)}), _deserializeList(_deserialize{get_function_name(raw_inner_type)})) :: any"))
 					dpath.new(type_tree, path, mark_as_literal("DataHandler<{[number]: "+inner_type+"}, string>"))
 
 			elif final_type[0:5] == "Dict[":
@@ -190,12 +263,12 @@ def build():
 					if raw_val[0] == " ":
 						raw_val = raw_val[1:]
 
-					dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", {var_name}, serializeDict(serializers[\"{raw_val}\"]), deserializeDict(deserializers[\"{raw_val}\"])) :: any"))
+					dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", {var_name}, _serializeDict(_serialize{get_function_name(raw_val)}), _deserializeDict(_deserialize{get_function_name(raw_val)})) :: any"))
 					dpath.new(type_tree, path, mark_as_literal("DataHandler<{["+key+"]: "+val+"}, string>"))
 			else:
 				ro_type = get_roblox_type(final_type)
 				if ro_type == "number":
-					dpath.new(func_tree, path, mark_as_literal(f"_newNumberHandler(\"{path}\", {value}, processors[\"{final_type}\"])"))
+					dpath.new(func_tree, path, mark_as_literal(f"_newNumberHandler(\"{path}\", {value}, _process{get_function_name(final_type)})"))
 					dpath.new(type_tree, path, mark_as_literal("NumberDataHandler"))
 				else:
 					dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\")"))
@@ -204,7 +277,7 @@ def build():
 		elif type(value) == str:
 			raw_value = get_raw_type_name(value)
 			if raw_value in config["types"]:
-				dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", nil, serializers[\"{raw_value}\"], deserializers[\"{raw_value}\"])"))
+				dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", nil, _serialize{raw_value}, _deserialize{raw_value})"))
 				dpath.new(type_tree, path, mark_as_literal(f"DataHandler<{final_type}, string>"))
 			else:
 				value = value.replace("{DISPLAY_NAME}", f"\"..player.DisplayName..\"")
@@ -217,10 +290,10 @@ def build():
 			dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", {value})"))
 			dpath.new(type_tree, path, mark_as_literal("DataHandler<boolean, boolean>"))
 		elif type(value) == int:
-			dpath.new(func_tree, path, mark_as_literal(f"_newNumberHandler(\"{path}\", {value}, processors[\"int\"])"))
+			dpath.new(func_tree, path, mark_as_literal(f"_newNumberHandler(\"{path}\", {value}, _processInt\"])"))
 			dpath.new(type_tree, path, mark_as_literal("NumberDataHandler"))
 		elif type(value) == float:
-			dpath.new(func_tree, path, mark_as_literal(f"_newNumberHandler(\"{path}\", {value}, processors[\"float\"])"))
+			dpath.new(func_tree, path, mark_as_literal(f"_newNumberHandler(\"{path}\", {value}, _processFloat\"])"))
 			dpath.new(type_tree, path, mark_as_literal("NumberDataHandler"))
 
 	for path, value in dpath.search(config["types"], '**', yielded=True):
@@ -247,6 +320,7 @@ def build():
 		"local NetworkUtil = " + get_package_require("NetworkUtil"),
 		"local Maid = " + get_package_require("Maid"),
 		"local Signal = " + get_package_require("Signal"),
+		"local Base64 = " + get_package_require("Base64"),
 		"",
 		"--Modules",
 		"local DataTypes = " + get_module_require(config["build"]["shared_types_roblox_path"]),
@@ -277,7 +351,7 @@ def build():
 			"SetOptions: DataStoreSetOptions,",
 			"IncrementOptions: DataStoreIncrementOptions,",
 			"init: (maid: Maid) -> nil,",
-			"new: (player: Player, scope: string, initialValue: T, serializer: Serializer<T,S>?, deserializer: Deserializer<S,T>?) -> DataHandler<T, S>,",
+			"new: (player: Player, scope: string, initialValue: T, _serializer: Serializer<T,S>?, _deserializer: Deserializer<S,T>?) -> DataHandler<T, S>,",
 			"Destroy: (self: DataHandler<T, S>) -> nil,",
 			"Get: (self: DataHandler<T, S>, force: boolean?) -> (T?, boolean),",
 			"Set: (self: DataHandler<T, S>, data: T, force: boolean?) -> boolean,",
@@ -298,7 +372,7 @@ def build():
 			"_Deserialize: Processor<number>,",
 			"_Value: number?,",
 			"Increment: (self: NumberDataHandler, delta: number, force: boolean?) -> (number?, boolean),",
-			"new: (player: Player, scope: string, initialValue: number, processor: Processor<number>?) -> NumberDataHandler,",
+			"new: (player: Player, scope: string, initialValue: number, _processor: Processor<number>?) -> NumberDataHandler,",
 			"GetSortedList: (self: NumberDataHandler, limit: number, isAscending: boolean) -> { [number]: SortedDataEntry },",
 		]) + [
 		"}",
@@ -314,78 +388,78 @@ def build():
 		"local METADATA = " + from_dict(config["metadata"]),
 		"",
 		"-- Private functions",
-		"function serializeList(unitMethod: (val: any) -> string): (val: { [number]: any }) -> string",
+		"function _serializeList(unitMethod: (((val: any) -> string) | ((val: number) -> number) | ((val: boolean) -> boolean))): (val: { [number]: any }) -> string",
 		"	return function(listVal: { [number]: any })",
 		"		local out = {}",
 		"		for i, v in ipairs(listVal) do",
-		"			out[i] = unitMethod(v)",
+		"			out[i] = (unitMethod :: any)(v)",
 		"		end",
 		"		return HttpService:JSONEncode(out)",
 		"	end",
 		"end",
-		"function deserializeList(unitMethod: (val: string) -> any): (val: string) -> { [number]: any }",
+		"function _deserializeList(unitMethod: (((val: string) -> any) | ((val: number) -> number) | ((val: boolean) -> boolean))): (val: string) -> { [number]: any }",
 		"	return function(listVal: string)",
 		"		local input = HttpService:JSONDecode(listVal)",
 		"		local out = {}",
 		"		for i, v in ipairs(input) do",
-		"			out[i] = unitMethod(v)",
+		"			out[i] = (unitMethod :: any)(v)",
 		"		end",
 		"		return out",
 		"	end",
 		"end",
-		"function serializeDict(unitMethod: (val: any) -> string): (val: { [string]: any }) -> string",
-		"	return function(dictVal: { [string]: any }): string",
+		"function _serializeDict(unitMethod: (((val: any) -> string) | ((val: number) -> number) | ((val: boolean) -> boolean))): (val: { [any]: any }) -> string",
+		"	return function(dictVal: { [any]: any }): string",
 		"		local out = {}",
 		"		for k, v in pairs(dictVal) do",
-		"			out[k] = unitMethod(v)",
+		"			out[k] = (unitMethod :: any)(v)",
 		"		end",
 		"		return HttpService:JSONEncode(out)",
 		"	end",
 		"end",
-		"function deserializeDict(unitMethod: (val: string) -> any): (val: string) -> { [string]: any }",
-		"	return function(dictVal: string): { [string]: any }",
+		"function _deserializeDict(unitMethod: (((val: string) -> any) | ((val: number) -> number) | ((val: boolean) -> boolean))): (val: string) -> { [any]: any }",
+		"	return function(dictVal: string): { [any]: any }",
 		"		local input = HttpService:JSONDecode(dictVal)",
 		"		local out = {}",
 		"		for k, v in pairs(input) do",
-		"			out[k] = unitMethod(v)",
+		"			out[k] = (unitMethod :: any)(v)",
 		"		end",
 		"		return out",
 		"	end",
 		"end",
 		"",
-		"local processors: {[string]: Processor<number>} = {}",
-		"processors[\"Integer\"] = function(value: number): number",
+		"local _processInteger = function(value: number): number",
 		"\treturn math.round(value)",
 		"end",
-		"processors[\"int\"] = processors[\"Integer\"]",
-		"processors[\"Double\"] = function(value: number): number",
+		"local _processInt = _processInteger",
+		"local _processDouble = function(value: number): number",
 		"\treturn math.round(value*100)/100",
 		"end",
-		"processors[\"double\"] = processors[\"Double\"]",
-		"processors[\"Float\"] = function(value: number): number",
+		"local _processFloat = function(value: number): number",
 		"\treturn value",
 		"end",
-		"processors[\"float\"] = processors[\"Float\"]",
 		"",
 		"",
 		"",
-		"local serializers: {[string]: Serializer<any, any>} = {}",
-		"serializers[\"Color3\"] = function(value: Color3): string",
+		"local _serializeColor3 = function(value: Color3): string",
 		"\treturn value:ToHex()",
 		"end",
-		"serializers[\"number\"] = function(value: number): number",
+		"local _serializeNumber = function(value: number): number",
 		"\treturn value",
 		"end",
-		"serializers[\"string\"] = function(value: string): string",
+		"local _serializeInteger = _serializeNumber",
+		"local _serializeInt = _serializeInteger",
+		"local _serializeDouble = _serializeNumber",
+		"local _serializeFloat = _serializeNumber",
+		"local _serializeString = function(value: string): string",
 		"\treturn value",
 		"end",
-		"serializers[\"boolean\"] = function(value: boolean): boolean",
+		"local _serializeBoolean = function(value: boolean): boolean",
 		"\treturn value",
 		"end",
-		"serializers[\"DateTime\"] = function(value: DateTime): string",
+		"local _serializeDateTime = function(value: DateTime): string",
 		"\treturn value:ToIsoDate()",
 		"end",
-		"serializers[\"Vector3\"] = function(value: Vector3): string",
+		"local _serializeVector3 = function(value: Vector3): string",
 		] + indent_block([		
 			"return HttpService:JSONEncode({",
 			] + indent_block([	
@@ -396,7 +470,7 @@ def build():
 			"})",
 		]) + [	
 		"end",
-		"serializers[\"Vector3Integer\"] = function(value: Vector3): string",
+		"local _serializeVector3Integer = function(value: Vector3): string",
 		] + indent_block([		
 			"return HttpService:JSONEncode({",
 			] + indent_block([	
@@ -407,7 +481,7 @@ def build():
 			"})",
 		]) + [	
 		"end",
-		"serializers[\"Vector3Double\"] = function(value: Vector3): string",
+		"local _serializeVector3Double = function(value: Vector3): string",
 		] + indent_block([		
 			"return HttpService:JSONEncode({",
 			] + indent_block([	
@@ -418,7 +492,7 @@ def build():
 			"})",
 		]) + [	
 		"end",
-		"serializers[\"Vector2\"] = function(value: Vector2): string",
+		"local _serializeVector2 = function(value: Vector2): string",
 		] + indent_block([		
 			"return HttpService:JSONEncode({",
 			] + indent_block([	
@@ -428,7 +502,7 @@ def build():
 			"})",
 		]) + [	
 		"end",
-		"serializers[\"Vector2Integer\"] = function(value: Vector2): string",
+		"local _serializeVector2Integer = function(value: Vector2): string",
 		] + indent_block([		
 			"return HttpService:JSONEncode({",
 			] + indent_block([	
@@ -438,7 +512,7 @@ def build():
 			"})",
 		]) + [	
 		"end",
-		"serializers[\"Vector2Double\"] = function(value: Vector2): string",
+		"local _serializeVector2Double = function(value: Vector2): string",
 		] + indent_block([		
 			"return HttpService:JSONEncode({",
 			] + indent_block([	
@@ -448,102 +522,105 @@ def build():
 			"})",
 		]) + [	
 		"end",
-		"serializers[\"CFrame\"] = function(value: CFrame): string",
+		"local _serializeCFrame = function(value: CFrame): string",
 		] + indent_block([		
 			"local x,y,z = value:ToEulerAnglesYXZ()",
 			"return HttpService:JSONEncode({",
 			] + indent_block([
-				"Position = serializers[\"Vector3\"](value.Position),",
-				"Orientation = serializers[\"Vector3\"](Vector3.new(math.deg(x), math.deg(y), math.deg(z))),",
+				"Position = _serializeVector3(value.Position),",
+				"Orientation = _serializeVector3(Vector3.new(math.deg(x), math.deg(y), math.deg(z))),",
 			]) + [
 			"})",
 		]) + [	
 		"end",
-		"serializers[\"CFrameDouble\"] = function(value: CFrame): string",
+		"local _serializeCFrameDouble = function(value: CFrame): string",
 		] + indent_block([		
 			"local x,y,z = value:ToEulerAnglesYXZ()",
 			"return HttpService:JSONEncode({",
 			] + indent_block([
-				"Position = serializers[\"Vector3Double\"](value.Position),",
-				"Orientation = serializers[\"Vector3Double\"](Vector3.new(math.deg(x), math.deg(y), math.deg(z))),",
+				"Position = _serializeVector3Double(value.Position),",
+				"Orientation = _serializeVector3Double(Vector3.new(math.deg(x), math.deg(y), math.deg(z))),",
 			]) + [
 			"})",
 		]) + [	
 		"end",
-		"serializers[\"CFrameInteger\"] = function(value: CFrame): string",
+		"local _serializeCFrameInteger = function(value: CFrame): string",
 		] + indent_block([		
 			"local x,y,z = value:ToEulerAnglesYXZ()",
 			"return HttpService:JSONEncode({",
 			] + indent_block([
-				"Position = serializers[\"Vector3Integer\"](value.Position),",
-				"Orientation = serializers[\"Vector3Integer\"](Vector3.new(math.deg(x), math.deg(y), math.deg(z))),",
+				"Position = _serializeVector3Integer(value.Position),",
+				"Orientation = _serializeVector3Integer(Vector3.new(math.deg(x), math.deg(y), math.deg(z))),",
 			]) + [
 			"})",
 		]) + [	
 		"end",
-		"serializers[\"Enum\"] = function(value: EnumItem): number",
-		"\treturn value.Value",
+		"local _serializeEnum = function(value: EnumItem): string",
+		"\treturn tostring(value.Value)",
 		"end",
 		] + type_serializers + [
 		"",
 		"",
 		"",
-		"local deserializers: {[string]: Deserializer<any, any>} = {}",
-		"deserializers[\"string\"] = function(value: string): string",
+		"local _deserializeString = function(value: string): string",
 		"\treturn value",
 		"end",
-		"deserializers[\"number\"] = function(value: number): number",
+		"local _deserializeNumber = function(value: number): number",
 		"\treturn value",
 		"end",
-		"deserializers[\"boolean\"] = function(value: boolean): boolean",
+		"local _deserializeInteger = _deserializeNumber",
+		"local _deserializeInt = _deserializeInteger",
+		"local _deserializeDouble = _deserializeNumber",
+		"local _deserializeFloat = _deserializeNumber",
+		"local _deserializeBoolean = function(value: boolean): boolean",
 		"\treturn value",
 		"end",
-		"deserializers[\"Color3\"] = function(value: string): Color3",
+		"local _deserializeColor3 = function(value: string): Color3",
 		"\treturn Color3.fromHex(value)",
 		"end",
-		"deserializers[\"DateTime\"] = function(value: string): DateTime",
+		"local _deserializeDateTime = function(value: string): DateTime",
 		"\treturn DateTime.fromIsoDate(value)",
 		"end",	
-		"deserializers[\"Vector3\"] = function(value: string): Vector3",
+		"local _deserializeVector3 = function(value: string): Vector3",
 		] + indent_block([		
 			"local data = HttpService:JSONDecode(value)",
 			"return Vector3.new(data.X, data.Y, data.Z)",
 		]) + [	
 		"end",
-		"deserializers[\"Vector3Integer\"] = function(value: string): Vector3",
+		"local _deserializeVector3Integer = function(value: string): Vector3",
 		] + indent_block([		
 			"local data = HttpService:JSONDecode(value)",
 			"return Vector3.new(math.round(data.X), math.round(data.Y), math.round(data.Z))",
 		]) + [	
 		"end",
-		"deserializers[\"Vector3Double\"] = function(value: string): Vector3",
+		"local _deserializeVector3Double = function(value: string): Vector3",
 		] + indent_block([		
 			"local data = HttpService:JSONDecode(value)",
 			"return Vector3.new(math.round(data.X*100)/100, math.round(data.Y*100)/100, math.round(data.Z*100)/100)",
 		]) + [	
 		"end",
-		"deserializers[\"Vector2\"] = function(value: string): Vector2",
+		"local _deserializeVector2 = function(value: string): Vector2",
 		] + indent_block([		
 			"local data = HttpService:JSONDecode(value)",
 			"return Vector2.new(data.X, data.Y)",
 		]) + [	
 		"end",
-		"deserializers[\"Vector2Integer\"] = function(value: string): Vector2",
+		"local _deserializeVector2Integer = function(value: string): Vector2",
 		] + indent_block([		
 			"local data = HttpService:JSONDecode(value)",
 			"return Vector2.new(math.round(data.X), math.round(data.Y))",
 		]) + [	
 		"end",
-		"deserializers[\"Vector2Double\"] = function(value: string): Vector2",
+		"local _deserializeVector2Double = function(value: string): Vector2",
 		] + indent_block([		
 			"local data = HttpService:JSONDecode(value)",
 			"return Vector2.new(math.round(data.X*100)/100, math.round(data.Y*100)/100)",
 		]) + [	
 		"end",
-		"deserializers[\"CFrame\"] = function(value: string): CFrame",
+		"local _deserializeCFrame = function(value: string): CFrame",
 		] + indent_block([		
 			"local data = HttpService:JSONDecode(value)",
-			"local position = deserializers[\"Vector3\"](data[\"Position\"])",
+			"local position = _deserializeVector3(data[\"Position\"])",
 			"return CFrame.fromEulerAnglesYXZ(",
 			"\tmath.rad(data.Orientation.X),",
 			"\tmath.rad(data.Orientation.Y),",
@@ -551,10 +628,10 @@ def build():
 			") + position"
 		]) + [	
 		"end",
-		"deserializers[\"CFrameInteger\"] = function(value: string): CFrame",
+		"local _deserializeCFrameInteger = function(value: string): CFrame",
 		] + indent_block([		
 			"local data = HttpService:JSONDecode(value)",
-			"local position = deserializers[\"Vector3Integer\"](data[\"Position\"])",
+			"local position = _deserializeVector3Integer(data[\"Position\"])",
 			"return CFrame.fromEulerAnglesYXZ(",
 			"\tmath.rad(math.round(data.Orientation.X)),",
 			"\tmath.rad(math.round(data.Orientation.Y)),",
@@ -562,10 +639,10 @@ def build():
 			") + position"
 		]) + [	
 		"end",
-		"deserializers[\"CFrameDouble\"] = function(value: string): CFrame",
+		"local _deserializeCFrameDouble = function(value: string): CFrame",
 		] + indent_block([		
 			"local data = HttpService:JSONDecode(value)",
-			"local position = deserializers[\"Vector3Double\"](data[\"Position\"])",
+			"local position = _deserializeVector3Double(data[\"Position\"])",
 			"return CFrame.fromEulerAnglesYXZ(",
 			"\tmath.rad(math.round(data.Orientation.X*100)/100),",
 			"\tmath.rad(math.round(data.Orientation.Y*100)/100),",
@@ -628,7 +705,15 @@ def build():
 			"\tsuccess = true",
 			"end",
 			"\tif data then",
-			"\t\tself._EncodedValue = self._Serialize(data)",
+			] + indent_block([
+				] + indent_block([
+					"if type(data) == \"string\" then",
+					"\tself._EncodedValue = Base64.Encode(self._Serialize(data))",
+					"else",
+					"\tself._EncodedValue = self._Serialize(data)",
+					"end",
+				]) + [
+			]) + [
 			"\telse",
 			"\t\tself._EncodedValue = nil",
 			"\tend",
@@ -683,13 +768,30 @@ def build():
 			"else",
 			"\tvalue = transformerWrapper(initialValue)",
 			"\tif value then",
-			"\t\tself._EncodedValue = value",
+			] + indent_block([
+				] + indent_block([
+					"if type(value) == \"string\" then",
+					"\tself._EncodedValue = Base64.Encode(self._Serialize(value))",
+					"else",
+					"\tself._EncodedValue = self._Serialize(value)",
+					"end",
+				]) + [
+			]) + [
 			"\telse",
 			"\t\tself._EncodedValue = nil",
 			"\tend",
 			"end",
 			"\tif self._EncodedValue then",
-			"\t\tself._Value = self._Deserialize(self._EncodedValue)",
+			] + indent_block([
+				] + indent_block([
+					"if type(self._EncodedValue) == \"string\" then",
+					"\tself._Value = self._Deserialize(Base64.Decode(self._EncodedValue))",
+					"else",
+					"\t\tself._Value = self._Deserialize(self._EncodedValue)",
+					"end",
+				]) + [
+			]) + [
+			
 			"\telse",
 			"\t\tself._Value = nil",
 			"\tend",	
@@ -734,7 +836,15 @@ def build():
 			"if success then",
 			"\tself._EncodedValue = data",
 			"\tif self._EncodedValue then",
-			"\t\tself._Value = self._Deserialize(self._EncodedValue)",
+			] + indent_block([
+				] + indent_block([
+					"if type(self._EncodedValue) == \"string\" then",
+					"\tself._Value = self._Deserialize(Base64.Decode(self._EncodedValue))",
+					"else",
+					"\t\tself._Value = self._Deserialize(self._EncodedValue)",
+					"end",
+				]) + [
+			]) + [
 			"\telse",
 			"\t\tself._Value = nil",
 			"\tend",
@@ -744,7 +854,7 @@ def build():
 		]) + [
 		"end",
 		"",	
-		"function DataHandler.new(player: Player, scope: string, initialValue: any, serializer: Serializer<any, string>?, deserializer: Deserializer<string, any>?)",
+		"function DataHandler.new(player: Player, scope: string, initialValue: any, _serializer: Serializer<any, string>?, _deserializer: Deserializer<string, any>?)",
 		] + indent_block([		
 			"local maid = Maid.new()",
 			"",
@@ -762,8 +872,8 @@ def build():
 			] + indent_block([		
 				"_Maid = maid,",
 				"_IsAlive = true,",
-				"_Serialize = if serializer then serializer else function(v: any) return v end,",
-				"_Deserialize = if deserializer then deserializer else function(v: any) return v end,",
+				"_Serialize = if _serializer then _serializer else function(v: any) return v end,",
+				"_Deserialize = if _deserializer then _deserializer else function(v: any) return v end,",
 				"OnChanged = onChanged,",
 				"DataStore = if not RunService:IsStudio()",
 				"\tthen DataStoreService:GetDataStore(BASE_DOMAIN, scope, dataStoreOptions)",
@@ -926,9 +1036,9 @@ def build():
 		]) + [	
 		"end",
 		"",
-		"function NumberDataHandler.new(player: Player, scope: string, initialValue: number, processor: Processor<number>?): NumberDataHandler",
+		"function NumberDataHandler.new(player: Player, scope: string, initialValue: number, _processor: Processor<number>?): NumberDataHandler",
 		] + indent_block([	
-			"local self: NumberDataHandler = setmetatable(DataHandler.new(player, scope, initialValue, processor :: any, processor :: any), NumberDataHandler) :: any",
+			"local self: NumberDataHandler = setmetatable(DataHandler.new(player, scope, initialValue, _processor :: any, _processor :: any), NumberDataHandler) :: any",
 			"",
 			"self.DataStore = if not RunService:IsStudio()",
 			"\tthen DataStoreService:GetOrderedDataStore(BASE_DOMAIN, scope)",
@@ -947,18 +1057,18 @@ def build():
 		"",
 		"function initPlayer(playerMaid: Maid, player: Player)",
 		] + indent_block([	
-			"local function _newDataHandler<G, S>(path: string, val: any, serializer: Serializer<G,S>?, deserializer: Deserializer<S, G>?): DataHandler<G, S>",
+			"local function _newDataHandler<G, S>(path: string, val: any, _serializer: Serializer<G,S>?, _deserializer: Deserializer<S, G>?): DataHandler<G, S>",
 			] + indent_block([	
-				"local handler: DataHandler<G,S> = DataHandler.new(player, path, val, serializer :: any, deserializer :: any) :: any",
+				"local handler: DataHandler<G,S> = DataHandler.new(player, path, val, _serializer :: any, _deserializer :: any) :: any",
 				"playerMaid:GiveTask(handler)",
 				"",
 				"return handler",
 			]) + [
 			"end",
 			"",
-			"local function _newNumberHandler(path: string, val: number, processor: Processor<number>?): NumberDataHandler",
+			"local function _newNumberHandler(path: string, val: number, _processor: Processor<number>?): NumberDataHandler",
 			] + indent_block([	
-				"local handler: NumberDataHandler = NumberDataHandler.new(player, path, val, processor) :: any",
+				"local handler: NumberDataHandler = NumberDataHandler.new(player, path, val, _processor) :: any",
 				"playerMaid:GiveTask(handler)",
 				"",
 				"return handler",

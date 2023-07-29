@@ -29,6 +29,7 @@ def build() -> None:
 			for k, v in type_def_input.items():
 				if type(v) == str:
 					raw_v = get_raw_type_name(v)
+					
 					if raw_v in custom_types:
 						if get_if_optional(v):
 							type_def[k] = mark_as_literal(raw_v + "?")

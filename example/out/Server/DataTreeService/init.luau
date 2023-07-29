@@ -11,6 +11,7 @@ local HttpService = game:GetService("HttpService")
 local NetworkUtil = require(script:WaitForChild("Packages"):WaitForChild("NetworkUtil"))
 local Maid = require(script:WaitForChild("Packages"):WaitForChild("Maid"))
 local Signal = require(script:WaitForChild("Packages"):WaitForChild("Signal"))
+local Base64 = require(script:WaitForChild("Packages"):WaitForChild("Base64"))
 
 --Modules
 local DataTypes = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("DataTreeTypes"))
@@ -43,7 +44,7 @@ export type DataHandler<T, S> = {
 	SetOptions: DataStoreSetOptions,
 	IncrementOptions: DataStoreIncrementOptions,
 	init: (maid: Maid) -> nil,
-	new: (player: Player, scope: string, initialValue: T, serializer: Serializer<T,S>?, deserializer: Deserializer<S,T>?) -> DataHandler<T, S>,
+	new: (player: Player, scope: string, initialValue: T, _serializer: Serializer<T,S>?, _deserializer: Deserializer<S,T>?) -> DataHandler<T, S>,
 	Destroy: (self: DataHandler<T, S>) -> nil,
 	Get: (self: DataHandler<T, S>, force: boolean?) -> (T?, boolean),
 	Set: (self: DataHandler<T, S>, data: T, force: boolean?) -> boolean,
@@ -62,7 +63,7 @@ export type NumberDataHandler = DataHandler<number, number> & {
 	_Deserialize: Processor<number>,
 	_Value: number?,
 	Increment: (self: NumberDataHandler, delta: number, force: boolean?) -> (number?, boolean),
-	new: (player: Player, scope: string, initialValue: number, processor: Processor<number>?) -> NumberDataHandler,
+	new: (player: Player, scope: string, initialValue: number, _processor: Processor<number>?) -> NumberDataHandler,
 	GetSortedList: (self: NumberDataHandler, limit: number, isAscending: boolean) -> { [number]: SortedDataEntry },
 }
 export type DataTree = {
@@ -94,276 +95,292 @@ local METADATA = {
 }
 
 -- Private functions
-function serializeList(unitMethod: (val: any) -> string): (val: { [number]: any }) -> string
+function _serializeList(unitMethod: (((val: any) -> string) | ((val: number) -> number) | ((val: boolean) -> boolean))): (val: { [number]: any }) -> string
 	return function(listVal: { [number]: any })
 		local out = {}
 		for i, v in ipairs(listVal) do
-			out[i] = unitMethod(v)
+			out[i] = (unitMethod :: any)(v)
 		end
 		return HttpService:JSONEncode(out)
 	end
 end
-function deserializeList(unitMethod: (val: string) -> any): (val: string) -> { [number]: any }
+function _deserializeList(unitMethod: (((val: string) -> any) | ((val: number) -> number) | ((val: boolean) -> boolean))): (val: string) -> { [number]: any }
 	return function(listVal: string)
 		local input = HttpService:JSONDecode(listVal)
 		local out = {}
 		for i, v in ipairs(input) do
-			out[i] = unitMethod(v)
+			out[i] = (unitMethod :: any)(v)
 		end
 		return out
 	end
 end
-function serializeDict(unitMethod: (val: any) -> string): (val: { [string]: any }) -> string
-	return function(dictVal: { [string]: any }): string
+function _serializeDict(unitMethod: (((val: any) -> string) | ((val: number) -> number) | ((val: boolean) -> boolean))): (val: { [any]: any }) -> string
+	return function(dictVal: { [any]: any }): string
 		local out = {}
 		for k, v in pairs(dictVal) do
-			out[k] = unitMethod(v)
+			out[k] = (unitMethod :: any)(v)
 		end
 		return HttpService:JSONEncode(out)
 	end
 end
-function deserializeDict(unitMethod: (val: string) -> any): (val: string) -> { [string]: any }
-	return function(dictVal: string): { [string]: any }
+function _deserializeDict(unitMethod: (((val: string) -> any) | ((val: number) -> number) | ((val: boolean) -> boolean))): (val: string) -> { [any]: any }
+	return function(dictVal: string): { [any]: any }
 		local input = HttpService:JSONDecode(dictVal)
 		local out = {}
 		for k, v in pairs(input) do
-			out[k] = unitMethod(v)
+			out[k] = (unitMethod :: any)(v)
 		end
 		return out
 	end
 end
 
-local processors: {[string]: Processor<number>} = {}
-processors["Integer"] = function(value: number): number
+local _processInteger = function(value: number): number
 	return math.round(value)
 end
-processors["int"] = processors["Integer"]
-processors["Double"] = function(value: number): number
+local _processInt = _processInteger
+local _processDouble = function(value: number): number
 	return math.round(value*100)/100
 end
-processors["double"] = processors["Double"]
-processors["Float"] = function(value: number): number
+local _processFloat = function(value: number): number
 	return value
 end
-processors["float"] = processors["Float"]
 
 
 
-local serializers: {[string]: Serializer<any, any>} = {}
-serializers["Color3"] = function(value: Color3): string
+local _serializeColor3 = function(value: Color3): string
 	return value:ToHex()
 end
-serializers["number"] = function(value: number): number
+local _serializeNumber = function(value: number): number
 	return value
 end
-serializers["string"] = function(value: string): string
+local _serializeInteger = _serializeNumber
+local _serializeInt = _serializeInteger
+local _serializeDouble = _serializeNumber
+local _serializeFloat = _serializeNumber
+local _serializeString = function(value: string): string
 	return value
 end
-serializers["boolean"] = function(value: boolean): boolean
+local _serializeBoolean = function(value: boolean): boolean
 	return value
 end
-serializers["DateTime"] = function(value: DateTime): string
+local _serializeDateTime = function(value: DateTime): string
 	return value:ToIsoDate()
 end
-serializers["Vector3"] = function(value: Vector3): string
+local _serializeVector3 = function(value: Vector3): string
 	return HttpService:JSONEncode({
 		X = value.X,
 		Y = value.Y,
 		Z = value.Z
 	})
 end
-serializers["Vector3Integer"] = function(value: Vector3): string
+local _serializeVector3Integer = function(value: Vector3): string
 	return HttpService:JSONEncode({
 		X = math.round(value.X),
 		Y = math.round(value.Y),
 		Z = math.round(value.Z)
 	})
 end
-serializers["Vector3Double"] = function(value: Vector3): string
+local _serializeVector3Double = function(value: Vector3): string
 	return HttpService:JSONEncode({
 		X = math.round(value.X*100)/100,
 		Y = math.round(value.Y*100)/100,
 		Z = math.round(value.Z*100)/100
 	})
 end
-serializers["Vector2"] = function(value: Vector2): string
+local _serializeVector2 = function(value: Vector2): string
 	return HttpService:JSONEncode({
 		X = value.X,
 		Y = value.Y
 	})
 end
-serializers["Vector2Integer"] = function(value: Vector2): string
+local _serializeVector2Integer = function(value: Vector2): string
 	return HttpService:JSONEncode({
 		X = math.round(value.X),
 		Y = math.round(value.Y)
 	})
 end
-serializers["Vector2Double"] = function(value: Vector2): string
+local _serializeVector2Double = function(value: Vector2): string
 	return HttpService:JSONEncode({
 		X = math.round(value.X*100)/100,
 		Y = math.round(value.Y*100)/100
 	})
 end
-serializers["CFrame"] = function(value: CFrame): string
+local _serializeCFrame = function(value: CFrame): string
 	local x,y,z = value:ToEulerAnglesYXZ()
 	return HttpService:JSONEncode({
-		Position = serializers["Vector3"](value.Position),
-		Orientation = serializers["Vector3"](Vector3.new(math.deg(x), math.deg(y), math.deg(z))),
+		Position = _serializeVector3(value.Position),
+		Orientation = _serializeVector3(Vector3.new(math.deg(x), math.deg(y), math.deg(z))),
 	})
 end
-serializers["CFrameDouble"] = function(value: CFrame): string
+local _serializeCFrameDouble = function(value: CFrame): string
 	local x,y,z = value:ToEulerAnglesYXZ()
 	return HttpService:JSONEncode({
-		Position = serializers["Vector3Double"](value.Position),
-		Orientation = serializers["Vector3Double"](Vector3.new(math.deg(x), math.deg(y), math.deg(z))),
+		Position = _serializeVector3Double(value.Position),
+		Orientation = _serializeVector3Double(Vector3.new(math.deg(x), math.deg(y), math.deg(z))),
 	})
 end
-serializers["CFrameInteger"] = function(value: CFrame): string
+local _serializeCFrameInteger = function(value: CFrame): string
 	local x,y,z = value:ToEulerAnglesYXZ()
 	return HttpService:JSONEncode({
-		Position = serializers["Vector3Integer"](value.Position),
-		Orientation = serializers["Vector3Integer"](Vector3.new(math.deg(x), math.deg(y), math.deg(z))),
+		Position = _serializeVector3Integer(value.Position),
+		Orientation = _serializeVector3Integer(Vector3.new(math.deg(x), math.deg(y), math.deg(z))),
 	})
 end
-serializers["Enum"] = function(value: EnumItem): number
-	return value.Value
+local _serializeEnum = function(value: EnumItem): string
+	return tostring(value.Value)
 end
-serializers["PermissionData"] = function(value: PermissionData): string
+local _serializeEnumMaterial = _serializeEnum :: (value: Enum.Material) -> string
+local _serializeEnumHumanoidStateType = _serializeEnum :: (value: Enum.HumanoidStateType) -> string
+local _serializeVehicleType = function(value: VehicleType): string
+	local index = table.find({"Sedan","Hatchback","Truck",}, value)
+	assert(index)
+	return tostring(index)
+end
+local _serializePermissionData = function(value: PermissionData): string
 	return HttpService:JSONEncode({
-		["CanDrive"] = serializers["boolean"](value["CanDrive"]),
-		["CanEdit"] = serializers["boolean"](value["CanEdit"]),
-		["CanSell"] = serializers["boolean"](value["CanSell"]),
+		["CanDrive"] = _serializeBoolean(value["CanDrive"]),
+		["CanEdit"] = _serializeBoolean(value["CanEdit"]),
+		["CanSell"] = _serializeBoolean(value["CanSell"]),
 	}) :: any
 end
-serializers["PerformanceData"] = function(value: PerformanceData): string
+local _serializePerformanceData = function(value: PerformanceData): string
 	return HttpService:JSONEncode({
-		["Speed"] = serializers["number"](value["Speed"]),
-		["Acceleration"] = serializers["number"](value["Acceleration"]),
-		["TurnSpeed"] = serializers["number"](value["TurnSpeed"]),
+		["Speed"] = _serializeDouble(value["Speed"]),
+		["Acceleration"] = _serializeDouble(value["Acceleration"]),
+		["TurnSpeed"] = _serializeDouble(value["TurnSpeed"]),
 	}) :: any
 end
-serializers["VehicleData"] = function(value: VehicleData): string
+local _serializeVehicleData = function(value: VehicleData): string
 	return HttpService:JSONEncode({
-		["Name"] = serializers["string"](value["Name"]),
-		["Type"] = serializers["VehicleType"](value["Type"]),
-		["Id"] = serializers["string"](value["Id"]),
-		["PurchaseTime"] = serializers["DateTime"](value["PurchaseTime"]),
-		["FrictionCoefficient"] = serializers["number"](value["FrictionCoefficient"]),
-		["Material"] = serializers["Enum.Material"](value["Material"]),
-		["Performance"] = serializers["PerformanceData"](value["Performance"]),
+		["Name"] = _serializeString(value["Name"]),
+		["Type"] = _serializeVehicleType(value["Type"]),
+		["Id"] = _serializeString(value["Id"]),
+		["PurchaseTime"] = _serializeDateTime(value["PurchaseTime"]),
+		["FrictionCoefficient"] = _serializeDouble(value["FrictionCoefficient"]),
+		["Material"] = _serializeEnumMaterial(value["Material"]),
+		["Performance"] = _serializePerformanceData(value["Performance"]),
 		["Appearance"] = {
-			["Color"] = serializers["Color3"](value["Appearance"]["Color"]),
-			["Skin"] = serializers["string"](value["Appearance"]["Skin"]),
+			["Color"] = _serializeColor3(value["Appearance"]["Color"]),
+			["Skin"] = if value["Appearance"]["Skin"] ~= nil then _serializeString(value["Appearance"]["Skin"]) else nil,
 		},
 	}) :: any
 end
 
 
 
-local deserializers: {[string]: Deserializer<any, any>} = {}
-deserializers["string"] = function(value: string): string
+local _deserializeString = function(value: string): string
 	return value
 end
-deserializers["number"] = function(value: number): number
+local _deserializeNumber = function(value: number): number
 	return value
 end
-deserializers["boolean"] = function(value: boolean): boolean
+local _deserializeInteger = _deserializeNumber
+local _deserializeInt = _deserializeInteger
+local _deserializeDouble = _deserializeNumber
+local _deserializeFloat = _deserializeNumber
+local _deserializeBoolean = function(value: boolean): boolean
 	return value
 end
-deserializers["Color3"] = function(value: string): Color3
+local _deserializeColor3 = function(value: string): Color3
 	return Color3.fromHex(value)
 end
-deserializers["DateTime"] = function(value: string): DateTime
+local _deserializeDateTime = function(value: string): DateTime
 	return DateTime.fromIsoDate(value)
 end
-deserializers["Vector3"] = function(value: string): Vector3
+local _deserializeVector3 = function(value: string): Vector3
 	local data = HttpService:JSONDecode(value)
 	return Vector3.new(data.X, data.Y, data.Z)
 end
-deserializers["Vector3Integer"] = function(value: string): Vector3
+local _deserializeVector3Integer = function(value: string): Vector3
 	local data = HttpService:JSONDecode(value)
 	return Vector3.new(math.round(data.X), math.round(data.Y), math.round(data.Z))
 end
-deserializers["Vector3Double"] = function(value: string): Vector3
+local _deserializeVector3Double = function(value: string): Vector3
 	local data = HttpService:JSONDecode(value)
 	return Vector3.new(math.round(data.X*100)/100, math.round(data.Y*100)/100, math.round(data.Z*100)/100)
 end
-deserializers["Vector2"] = function(value: string): Vector2
+local _deserializeVector2 = function(value: string): Vector2
 	local data = HttpService:JSONDecode(value)
 	return Vector2.new(data.X, data.Y)
 end
-deserializers["Vector2Integer"] = function(value: string): Vector2
+local _deserializeVector2Integer = function(value: string): Vector2
 	local data = HttpService:JSONDecode(value)
 	return Vector2.new(math.round(data.X), math.round(data.Y))
 end
-deserializers["Vector2Double"] = function(value: string): Vector2
+local _deserializeVector2Double = function(value: string): Vector2
 	local data = HttpService:JSONDecode(value)
 	return Vector2.new(math.round(data.X*100)/100, math.round(data.Y*100)/100)
 end
-deserializers["CFrame"] = function(value: string): CFrame
+local _deserializeCFrame = function(value: string): CFrame
 	local data = HttpService:JSONDecode(value)
-	local position = deserializers["Vector3"](data["Position"])
+	local position = _deserializeVector3(data["Position"])
 	return CFrame.fromEulerAnglesYXZ(
 		math.rad(data.Orientation.X),
 		math.rad(data.Orientation.Y),
 		math.rad(data.Orientation.Z)
 	) + position
 end
-deserializers["CFrameInteger"] = function(value: string): CFrame
+local _deserializeCFrameInteger = function(value: string): CFrame
 	local data = HttpService:JSONDecode(value)
-	local position = deserializers["Vector3Integer"](data["Position"])
+	local position = _deserializeVector3Integer(data["Position"])
 	return CFrame.fromEulerAnglesYXZ(
 		math.rad(math.round(data.Orientation.X)),
 		math.rad(math.round(data.Orientation.Y)),
 		math.rad(math.round(data.Orientation.Z))
 	) + position
 end
-deserializers["CFrameDouble"] = function(value: string): CFrame
+local _deserializeCFrameDouble = function(value: string): CFrame
 	local data = HttpService:JSONDecode(value)
-	local position = deserializers["Vector3Double"](data["Position"])
+	local position = _deserializeVector3Double(data["Position"])
 	return CFrame.fromEulerAnglesYXZ(
 		math.rad(math.round(data.Orientation.X*100)/100),
 		math.rad(math.round(data.Orientation.Y*100)/100),
 		math.rad(math.round(data.Orientation.Z*100)/100)
 	) + position
 end
-deserializers["Enum.HumanoidStateType"] = function(value: number): Enum.HumanoidStateType
-	for i, enumItem in ipairs(Enum.HumanoidStateType:GetEnumItems()) do if enumItem.Value == value then return enumItem end end
-error("No enum item found in HumanoidStateType for value "..tostring(value))
+local _deserializeEnumHumanoidStateType = function(value: string): Enum.HumanoidStateType
+	for i, enumItem in ipairs(Enum.HumanoidStateType:GetEnumItems()) do if enumItem.Value == tonumber(value) then return enumItem end end
+	error("No enum item found in HumanoidStateType for value "..value)
 end
-deserializers["Enum.Material"] = function(value: number): Enum.Material
-	for i, enumItem in ipairs(Enum.Material:GetEnumItems()) do if enumItem.Value == value then return enumItem end end
-error("No enum item found in Material for value "..tostring(value))
+local _deserializeEnumMaterial = function(value: string): Enum.Material
+	for i, enumItem in ipairs(Enum.Material:GetEnumItems()) do if enumItem.Value == tonumber(value) then return enumItem end end
+	error("No enum item found in Material for value "..value)
 end
-deserializers["PermissionData"] = function(value: string): PermissionData
+local _deserializeVehicleType = function(value: number): VehicleType
+	local options = {"Sedan","Hatchback","Truck",}
+	local index = tonumber(value)
+	assert(index)
+	return options[index] :: VehicleType
+end
+local _deserializePermissionData = function(value: string): PermissionData
 	local data = HttpService:JSONDecode(value)
 	return {
-		["CanDrive"] = deserializers["boolean"](data["CanDrive"]),
-		["CanEdit"] = deserializers["boolean"](data["CanEdit"]),
-		["CanSell"] = deserializers["boolean"](data["CanSell"]),
+		["CanDrive"] = _deserializeBoolean(data["CanDrive"]),
+		["CanEdit"] = _deserializeBoolean(data["CanEdit"]),
+		["CanSell"] = _deserializeBoolean(data["CanSell"]),
 	} :: any
 end
-deserializers["PerformanceData"] = function(value: string): PerformanceData
+local _deserializePerformanceData = function(value: string): PerformanceData
 	local data = HttpService:JSONDecode(value)
 	return {
-		["Speed"] = deserializers["number"](data["Speed"]),
-		["Acceleration"] = deserializers["number"](data["Acceleration"]),
-		["TurnSpeed"] = deserializers["number"](data["TurnSpeed"]),
+		["Speed"] = _deserializeNumber(data["Speed"]),
+		["Acceleration"] = _deserializeNumber(data["Acceleration"]),
+		["TurnSpeed"] = _deserializeNumber(data["TurnSpeed"]),
 	} :: any
 end
-deserializers["VehicleData"] = function(value: string): VehicleData
+local _deserializeVehicleData = function(value: string): VehicleData
 	local data = HttpService:JSONDecode(value)
 	return {
-		["Name"] = deserializers["string"](data["Name"]),
-		["Type"] = deserializers["VehicleType"](data["Type"]),
-		["Id"] = deserializers["string"](data["Id"]),
-		["PurchaseTime"] = deserializers["DateTime"](data["PurchaseTime"]),
-		["FrictionCoefficient"] = deserializers["number"](data["FrictionCoefficient"]),
-		["Material"] = deserializers["Enum.Material"](data["Material"]),
-		["Performance"] = deserializers["PerformanceData"](data["Performance"]),
+		["Name"] = _deserializeString(data["Name"]),
+		["Type"] = _deserializeVehicleType(data["Type"]),
+		["Id"] = _deserializeString(data["Id"]),
+		["PurchaseTime"] = _deserializeDateTime(data["PurchaseTime"]),
+		["FrictionCoefficient"] = _deserializeNumber(data["FrictionCoefficient"]),
+		["Material"] = _deserializeEnumMaterial(data["Material"]),
+		["Performance"] = _deserializePerformanceData(data["Performance"]),
 		["Appearance"] = {
-			["Color"] = deserializers["Color3"](data["Appearance"]["Color"]),
-			["Skin"] = deserializers["string"](data["Appearance"]["Skin"]),
+			["Color"] = _deserializeColor3(data["Appearance"]["Color"]),
+			["Skin"] = if data["Appearance"]["Skin"] ~= nil then _deserializeString(data["Appearance"]["Skin"]) else nil,
 		},
 	} :: any
 end
@@ -412,7 +429,11 @@ function DataHandler:Set(data: any, force: boolean?)
 		success = true
 	end
 		if data then
-			self._EncodedValue = self._Serialize(data)
+			if type(data) == "string" then
+				self._EncodedValue = Base64.Encode(self._Serialize(data))
+			else
+				self._EncodedValue = self._Serialize(data)
+			end
 		else
 			self._EncodedValue = nil
 		end
@@ -458,13 +479,21 @@ function DataHandler:Update(transformer: (any) -> any, force: boolean?)
 	else
 		value = transformerWrapper(initialValue)
 		if value then
-			self._EncodedValue = value
+			if type(value) == "string" then
+				self._EncodedValue = Base64.Encode(self._Serialize(value))
+			else
+				self._EncodedValue = self._Serialize(value)
+			end
 		else
 			self._EncodedValue = nil
 		end
 	end
 		if self._EncodedValue then
-			self._Value = self._Deserialize(self._EncodedValue)
+			if type(self._EncodedValue) == "string" then
+				self._Value = self._Deserialize(Base64.Decode(self._EncodedValue))
+			else
+					self._Value = self._Deserialize(self._EncodedValue)
+			end
 		else
 			self._Value = nil
 		end
@@ -503,7 +532,11 @@ function DataHandler:Get(force: boolean?): (any?, boolean)
 	if success then
 		self._EncodedValue = data
 		if self._EncodedValue then
-			self._Value = self._Deserialize(self._EncodedValue)
+			if type(self._EncodedValue) == "string" then
+				self._Value = self._Deserialize(Base64.Decode(self._EncodedValue))
+			else
+					self._Value = self._Deserialize(self._EncodedValue)
+			end
 		else
 			self._Value = nil
 		end
@@ -512,7 +545,7 @@ function DataHandler:Get(force: boolean?): (any?, boolean)
 	return self._Value, success
 end
 
-function DataHandler.new(player: Player, scope: string, initialValue: any, serializer: Serializer<any, string>?, deserializer: Deserializer<string, any>?)
+function DataHandler.new(player: Player, scope: string, initialValue: any, _serializer: Serializer<any, string>?, _deserializer: Deserializer<string, any>?)
 	local maid = Maid.new()
 	
 	local dataStoreOptions = Instance.new("DataStoreOptions")
@@ -528,8 +561,8 @@ function DataHandler.new(player: Player, scope: string, initialValue: any, seria
 	local self: DataHandler<any, string> = setmetatable({
 		_Maid = maid,
 		_IsAlive = true,
-		_Serialize = if serializer then serializer else function(v: any) return v end,
-		_Deserialize = if deserializer then deserializer else function(v: any) return v end,
+		_Serialize = if _serializer then _serializer else function(v: any) return v end,
+		_Deserialize = if _deserializer then _deserializer else function(v: any) return v end,
 		OnChanged = onChanged,
 		DataStore = if not RunService:IsStudio()
 			then DataStoreService:GetDataStore(BASE_DOMAIN, scope, dataStoreOptions)
@@ -663,8 +696,8 @@ function NumberDataHandler:Increment(delta: number, force: boolean?)
 	return self._Value, success
 end
 
-function NumberDataHandler.new(player: Player, scope: string, initialValue: number, processor: Processor<number>?): NumberDataHandler
-	local self: NumberDataHandler = setmetatable(DataHandler.new(player, scope, initialValue, processor :: any, processor :: any), NumberDataHandler) :: any
+function NumberDataHandler.new(player: Player, scope: string, initialValue: number, _processor: Processor<number>?): NumberDataHandler
+	local self: NumberDataHandler = setmetatable(DataHandler.new(player, scope, initialValue, _processor :: any, _processor :: any), NumberDataHandler) :: any
 	
 	self.DataStore = if not RunService:IsStudio()
 		then DataStoreService:GetOrderedDataStore(BASE_DOMAIN, scope)
@@ -681,15 +714,15 @@ end
 local trees: { [number]: any } = {}
 
 function initPlayer(playerMaid: Maid, player: Player)
-	local function _newDataHandler<G, S>(path: string, val: any, serializer: Serializer<G,S>?, deserializer: Deserializer<S, G>?): DataHandler<G, S>
-		local handler: DataHandler<G,S> = DataHandler.new(player, path, val, serializer :: any, deserializer :: any) :: any
+	local function _newDataHandler<G, S>(path: string, val: any, _serializer: Serializer<G,S>?, _deserializer: Deserializer<S, G>?): DataHandler<G, S>
+		local handler: DataHandler<G,S> = DataHandler.new(player, path, val, _serializer :: any, _deserializer :: any) :: any
 		playerMaid:GiveTask(handler)
 		
 		return handler
 	end
 	
-	local function _newNumberHandler(path: string, val: number, processor: Processor<number>?): NumberDataHandler
-		local handler: NumberDataHandler = NumberDataHandler.new(player, path, val, processor) :: any
+	local function _newNumberHandler(path: string, val: number, _processor: Processor<number>?): NumberDataHandler
+		local handler: NumberDataHandler = NumberDataHandler.new(player, path, val, _processor) :: any
 		playerMaid:GiveTask(handler)
 		
 		return handler
@@ -722,15 +755,15 @@ function initPlayer(playerMaid: Maid, player: Player)
 }
 	local tree: DataTree = {
 			["CompanyName"] = _newDataHandler("CompanyName", ""..player.DisplayName.."'s Company"),
-			["State"] = _newDataHandler("State", treeStateVal, serializers["Enum.HumanoidStateType"], deserializers["Enum.HumanoidStateType"]),
+			["State"] = _newDataHandler("State", treeStateVal, _serializeEnumHumanoidStateType, _deserializeEnumHumanoidStateType),
 			["Location"] = _newDataHandler("Location"),
 			["Currency"] = {
-				["Cash"] = _newNumberHandler("Currency/Cash", 1000, processors["int"]),
-				["VehicleCredits"] = _newNumberHandler("Currency/VehicleCredits", 5, processors["int"]),
+				["Cash"] = _newNumberHandler("Currency/Cash", 1000, _processInt),
+				["VehicleCredits"] = _newNumberHandler("Currency/VehicleCredits", 5, _processInt),
 			},
 			["Garage"] = {
-				["Slots"] = _newDataHandler("Garage/Slots", treeGarageSlotsVal, serializeList(serializers["VehicleData"]), deserializeList(deserializers["VehicleData"])) :: any,
-				["Permissions"] = _newDataHandler("Garage/Permissions", treeGaragePermissionsVal, serializeDict(serializers[" PermissionData"]), deserializeDict(deserializers[" PermissionData"])) :: any,
+				["Slots"] = _newDataHandler("Garage/Slots", treeGarageSlotsVal, _serializeList(_serializeVehicleData), _deserializeList(_deserializeVehicleData)) :: any,
+				["Permissions"] = _newDataHandler("Garage/Permissions", treeGaragePermissionsVal, _serializeDict(_serializePermissionData), _deserializeDict(_deserializePermissionData)) :: any,
 			},
 		}
 	trees[player.UserId] = tree

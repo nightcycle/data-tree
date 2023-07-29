@@ -231,7 +231,6 @@ def write_standard_value_from_config(config_val: Any, val_type: AcceptedType) ->
 
 
 def write_custom_value_from_config(config_val: Any, type_name: str, config_types: dict[str, list | dict]) -> str:
-
 	if config_val == "nil":
 		return "nil"
 
@@ -303,7 +302,8 @@ def get_raw_key_name(key: str) -> str:
 	else:
 		return key
 
-def get_roblox_type(type_name: str) -> str | None:
+def get_roblox_type(type_name: str, error_on_bad_type=True) -> str:
+
 	question_ending = ""
 	if get_if_optional(type_name):
 		question_ending = "?"
@@ -311,22 +311,25 @@ def get_roblox_type(type_name: str) -> str | None:
 	type_name = get_raw_type_name(type_name)
 
 	for k, options in TYPE_CONVERSIONS.items():
-		if type_name in options:
+		if (type_name in options) or type_name == k:
 			return k + question_ending
 	
 	if type_name[0:5] == "List[":
 		type_name = type_name[5:]
 		type_name = type_name[0:(len(type_name)-1)]
-		return "{[number]: "+type_name+"}" + question_ending
+		return "{[number]: "+get_roblox_type(type_name, error_on_bad_type=False)+"}" + question_ending
 	elif type_name[0:5] == "Dict[":
 		type_name = type_name[5:]
 		type_name = type_name[0:(len(type_name)-1)]
 		param_list = type_name.split(",")
 		key = param_list[0].replace(" ", "")
 		val = param_list[1].replace(" ", "")
-		return "{["+key+"]: "+val+"}" + question_ending
+		return "{["+get_roblox_type(key, error_on_bad_type=False)+"]: "+get_roblox_type(val, error_on_bad_type=False)+"}" + question_ending
 	elif type_name[0:5] == "Enum.":
 		enum_name = type_name.split(".")[1]
 		return "Enum." + enum_name + question_ending
 
-	raise ValueError(f"bad type name: {type_name}")
+	if error_on_bad_type:
+		raise ValueError(f"bad type name: {type_name}")
+	else:
+		return type_name + question_ending

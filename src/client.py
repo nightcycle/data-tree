@@ -30,7 +30,6 @@ def build() -> None:
 			if final_type == None:
 				raw_keys.append(get_raw_key_name(key))
 				final_type = get_type_name_from_key(key)
-						
 
 		path = "/".join(raw_keys)
 		if len(raw_keys) < len(keys):
