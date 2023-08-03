@@ -289,10 +289,10 @@ def build():
 			dpath.new(func_tree, path, mark_as_literal(f"_newDataHandler(\"{path}\", {value})"))
 			dpath.new(type_tree, path, mark_as_literal("DataHandler<boolean, boolean>"))
 		elif type(value) == int:
-			dpath.new(func_tree, path, mark_as_literal(f"_newNumberHandler(\"{path}\", {value}, _processInt\"])"))
+			dpath.new(func_tree, path, mark_as_literal(f"_newNumberHandler(\"{path}\", {value}, _processInt)"))
 			dpath.new(type_tree, path, mark_as_literal("NumberDataHandler"))
 		elif type(value) == float:
-			dpath.new(func_tree, path, mark_as_literal(f"_newNumberHandler(\"{path}\", {value}, _processFloat\"])"))
+			dpath.new(func_tree, path, mark_as_literal(f"_newNumberHandler(\"{path}\", {value}, _processFloat)"))
 			dpath.new(type_tree, path, mark_as_literal("NumberDataHandler"))
 
 	for path, value in dpath.search(config["types"], '**', yielded=True):
